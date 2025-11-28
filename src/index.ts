@@ -80,15 +80,9 @@ program
 program
   .command("add-command")
   .alias("new-command")
-  .description(
-    "Create a new Cursor command (Markdown file) or install a template"
-  )
-  .argument(
-    "[template]",
-    "Optional template name to install (e.g., use-subagents)"
-  )
-  .action(async (template?: string) => {
-    await addCommand(template);
+  .description("Install a Cursor command template")
+  .action(async () => {
+    await addCommand();
   });
 
 program.parse();

@@ -128,7 +128,10 @@ export async function saveState(state: AgentsRegistry): Promise<void> {
 }
 
 export function urlEncode(prompt: string): string {
-  return encodeURIComponent(prompt);
+  // Use encodeURIComponent which encodes spaces as %20
+  // Then replace any + signs with %2B to ensure they're not interpreted as spaces
+  // This ensures spaces stay as %20 and are not converted to + during URL parsing
+  return encodeURIComponent(prompt).replace(/\+/g, '%2B');
 }
 
 export function spawnAgent(prompt: string, agentId: string, delaySeconds: number = 0): void {
