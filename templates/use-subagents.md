@@ -2,12 +2,24 @@
 
 Split the tasks you've received into multiple components that can be run independently.
 
+
+## Instructions File
+Put the detailed instructions for each agent into a file in .csa/<parent-task-name>/<agent-sub-task>.md
+Each file has to contain: 
+
+- The overarching goal of the orchestrator agent
+- The detailed instructions for the sub-agent
+- Ways that the agent can verify its own work (run tests, check files, etc.)
+- That the subagent has to run `csa complete <agentId> "your optional return message here"` when it is finished to notify the orchestrator. (This can be also done during the implementation to check if it is on track!)
+
+## Spawn Agents
 You then spawn sub-agents via:
 
 ```bash
 csa spawn "prompt 1" "prompt 2" "prompt 3"
 ```
 
+## Order of Execution
 Those agents run in parallel and you need to ensure they are independent.
 
 For running in sequence, you just wait until they are finished and then run the next `csa spawn ...` command.
