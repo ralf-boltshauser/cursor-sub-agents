@@ -89,6 +89,24 @@ Shows all sessions and agents with their current status.
 - `cursor-sub-agents complete <agentId> [message]` - Submit work and wait for approval
   - Optional: `--timeout <minutes>` (default: 30)
 
+### Cursor Command Management
+
+- `cursor-sub-agents add-command [template]` - Create a new Cursor command or install a template
+  - Without template: Interactive prompt to create a custom command
+  - With template: Install a pre-written command template (e.g., `use-subagents`)
+  - Prompts for installation location: global (`~/.cursor/commands/`) or project (`.cursor/commands/`)
+
+**Example:**
+```bash
+# Install the use-subagents template
+csa add-command use-subagents
+
+# Create a custom command interactively
+csa add-command
+```
+
+The `use-subagents` template provides instructions for splitting tasks into independent components and using sub-agents effectively.
+
 ## Features
 
 - ✅ **Parallel Agent Execution** - Spawn multiple agents simultaneously
@@ -100,6 +118,7 @@ Shows all sessions and agents with their current status.
 - ✅ **Timeout Handling** - Configurable timeouts for agent operations
 - ✅ **Status Monitoring** - Real-time status of all agents
 - ✅ **JSON Output** - Machine-readable output for programmatic use
+- ✅ **Cursor Command Templates** - Pre-written commands for common workflows
 
 ## How It Works
 

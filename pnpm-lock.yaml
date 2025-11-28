@@ -12,8 +12,8 @@ importers:
         specifier: ^5.3.0
         version: 5.6.2
       commander:
-        specifier: ^11.1.0
-        version: 11.1.0
+        specifier: ^14.0.2
+        version: 14.0.2
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
@@ -202,9 +202,9 @@ packages:
     resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
     engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
-  commander@11.1.0:
-    resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
-    engines: {node: '>=16'}
+  commander@14.0.2:
+    resolution: {integrity: sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ==}
+    engines: {node: '>=20'}
 
   esbuild@0.25.12:
     resolution: {integrity: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==}
@@ -340,7 +340,7 @@ snapshots:
 
   chalk@5.6.2: {}
 
-  commander@11.1.0: {}
+  commander@14.0.2: {}
 
   esbuild@0.25.12:
     optionalDependencies:

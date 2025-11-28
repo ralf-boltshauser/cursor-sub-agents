@@ -3,6 +3,7 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import { acceptAgent } from "./commands/accept.js";
+import { addCommand } from "./commands/add-command.js";
 import { completeAgent } from "./commands/complete.js";
 import { feedbackAgent } from "./commands/feedback.js";
 import { spawnAgents } from "./commands/spawn.js";
@@ -14,7 +15,7 @@ const program = new Command();
 program
   .name("cursor-sub-agents")
   .description("Manage multiple Cursor sub-agents in parallel")
-  .version("1.0.0");
+  .version("1.1.0");
 
 program
   .command("spawn")
@@ -74,6 +75,20 @@ program
   .description("List all sessions and their agents")
   .action(async () => {
     await listStatus();
+  });
+
+program
+  .command("add-command")
+  .alias("new-command")
+  .description(
+    "Create a new Cursor command (Markdown file) or install a template"
+  )
+  .argument(
+    "[template]",
+    "Optional template name to install (e.g., use-subagents)"
+  )
+  .action(async (template?: string) => {
+    await addCommand(template);
   });
 
 program.parse();
