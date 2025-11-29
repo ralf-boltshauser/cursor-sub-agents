@@ -1,0 +1,27 @@
+{
+  "sessions": {
+    "7k0c": {
+      "agents": [
+        {
+          "id": "tfnl",
+          "prompt": "Test prompt 1",
+          "status": "completed",
+          "startedAt": "2025-11-28T18:14:07.297Z",
+          "repository": "/Users/ralf/Documents/prj/exploration/coding/node/cursor-agent-manager",
+          "completedAt": "2025-11-28T18:14:42.767Z",
+          "returnMessage": "Test completed successfully - agent manager system is working correctly"
+        },
+        {
+          "id": "hpj4",
+          "prompt": "Test prompt 2",
+          "status": "timeout",
+          "startedAt": "2025-11-28T18:14:07.297Z",
+          "repository": "/Users/ralf/Documents/prj/exploration/coding/node/cursor-agent-manager",
+          "error": "Timeout waiting for completion"
+        }
+      ],
+      "createdAt": "2025-11-28T18:14:07.297Z",
+      "completedAt": "2025-11-28T18:44:08.850Z"
+    }
+  }
+}

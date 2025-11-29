@@ -5,7 +5,7 @@ import path from "path";
 import lockfile from "proper-lockfile";
 import { AgentState, AgentsRegistry } from "./types.js";
 
-const STATE_DIR = path.join(os.homedir(), ".cursor-agents");
+const STATE_DIR = path.join(os.homedir(), ".csa");
 export const STATE_FILE = path.join(STATE_DIR, "state.json");
 const LOCK_OPTIONS = {
   retries: {
@@ -142,20 +142,223 @@ export function urlEncode(prompt: string): string {
   return encodeURIComponent(prompt).replace(/\+/g, "%2B");
 }
 
-export function spawnAgent(
+// Config file management
+export interface ConfigFile {
+  followUpPrompts: string[];
+}
+
+const GLOBAL_CONFIG_FILE = path.join(STATE_DIR, "config.json");
+const LOCAL_CONFIG_FILE = path.join(process.cwd(), ".csa", "config.json");
+
+export async function getLocalConfigPath(): Promise<string> {
+  return LOCAL_CONFIG_FILE;
+}
+
+export async function getGlobalConfigPath(): Promise<string> {
+  return GLOBAL_CONFIG_FILE;
+}
+
+export async function ensureConfigDir(configPath: string): Promise<void> {
+  const dir = path.dirname(configPath);
+  try {
+    await fs.mkdir(dir, { recursive: true });
+  } catch {
+    // Directory might already exist, ignore
+  }
+}
+
+export async function loadConfig(
+  configPath: string
+): Promise<ConfigFile | null> {
+  try {
+    await ensureConfigDir(configPath);
+    const content = await fs.readFile(configPath, "utf-8");
+    const config = JSON.parse(content) as ConfigFile;
+    if (config && Array.isArray(config.followUpPrompts)) {
+      return config;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveConfig(
+  configPath: string,
+  config: ConfigFile
+): Promise<void> {
+  await ensureConfigDir(configPath);
+  const content = JSON.stringify(config, null, 2);
+  await fs.writeFile(configPath, content, "utf-8");
+}
+
+export async function getActiveConfig(): Promise<{
+  config: ConfigFile | null;
+  source: "local" | "global" | "default";
+  path: string;
+}> {
+  // Try local config first
+  try {
+    const localConfig = await loadConfig(LOCAL_CONFIG_FILE);
+    if (localConfig) {
+      return { config: localConfig, source: "local", path: LOCAL_CONFIG_FILE };
+    }
+  } catch {
+    // Local config doesn't exist or is invalid, continue
+  }
+
+  // Try global config
+  try {
+    const globalConfig = await loadConfig(GLOBAL_CONFIG_FILE);
+    if (globalConfig) {
+      return {
+        config: globalConfig,
+        source: "global",
+        path: GLOBAL_CONFIG_FILE,
+      };
+    }
+  } catch {
+    // Global config doesn't exist or is invalid, continue
+  }
+
+  // Return defaults
+  return {
+    config: {
+      followUpPrompts: [
+        "Verify if the changes you have implemented are actually working and align with the instructions provided",
+        "please complete your work by executing ```csa complete {agentId}```",
+      ],
+    },
+    source: "default",
+    path: "",
+  };
+}
+
+export async function deleteConfig(configPath: string): Promise<void> {
+  try {
+    await fs.unlink(configPath);
+  } catch {
+    // File doesn't exist, ignore
+  }
+}
+
+/**
+ * Get follow-up prompts from config files, environment variable, or return defaults
+ * Priority: local config > global config > env var > defaults
+ * The string "{agentId}" will be replaced with the actual agent ID
+ */
+export async function getFollowUpPrompts(agentId: string): Promise<string[]>;
+export function getFollowUpPrompts(agentId: string): string[];
+export function getFollowUpPrompts(
+  agentId: string
+): string[] | Promise<string[]> {
+  // Check environment variable first (highest priority for backward compatibility)
+  const envPrompts = process.env.CSA_FOLLOWUP_PROMPTS;
+
+  if (envPrompts) {
+    try {
+      // Try parsing as JSON first
+      const parsed = JSON.parse(envPrompts);
+      if (Array.isArray(parsed)) {
+        return parsed.map((prompt: string) =>
+          typeof prompt === "string"
+            ? prompt.replace(/{agentId}/g, agentId)
+            : String(prompt)
+        );
+      }
+    } catch {
+      // Not JSON, try pipe-separated format
+    }
+
+    // Try pipe-separated format
+    if (envPrompts.includes("|")) {
+      return envPrompts
+        .split("|")
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0)
+        .map((p) => p.replace(/{agentId}/g, agentId));
+    }
+
+    // Single prompt
+    return [envPrompts.replace(/{agentId}/g, agentId)];
+  }
+
+  // If called synchronously (for backward compatibility), return defaults
+  // Otherwise, this will be handled by the async version
+  return [
+    "Verify if the changes you have implemented are actually working and align with the instructions provided",
+    `please complete your work by executing \`\`\`csa complete ${agentId}\`\`\``,
+  ];
+}
+
+export async function getFollowUpPromptsAsync(
+  agentId: string
+): Promise<string[]> {
+  // Check environment variable first (highest priority for backward compatibility)
+  const envPrompts = process.env.CSA_FOLLOWUP_PROMPTS;
+
+  if (envPrompts) {
+    try {
+      // Try parsing as JSON first
+      const parsed = JSON.parse(envPrompts);
+      if (Array.isArray(parsed)) {
+        return parsed.map((prompt: string) =>
+          typeof prompt === "string"
+            ? prompt.replace(/{agentId}/g, agentId)
+            : String(prompt)
+        );
+      }
+    } catch {
+      // Not JSON, try pipe-separated format
+    }
+
+    // Try pipe-separated format
+    if (envPrompts.includes("|")) {
+      return envPrompts
+        .split("|")
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0)
+        .map((p) => p.replace(/{agentId}/g, agentId));
+    }
+
+    // Single prompt
+    return [envPrompts.replace(/{agentId}/g, agentId)];
+  }
+
+  // Try config files
+  const activeConfig = await getActiveConfig();
+  if (activeConfig.config) {
+    return activeConfig.config.followUpPrompts.map((p) =>
+      p.replace(/{agentId}/g, agentId)
+    );
+  }
+
+  // Return defaults
+  return [
+    "Verify if the changes you have implemented are actually working and align with the instructions provided",
+    `please complete your work by executing \`\`\`csa complete ${agentId}\`\`\``,
+  ];
+}
+
+export async function spawnAgent(
   prompt: string,
   agentId: string,
-  delaySeconds: number = 0
-): void {
-  const completionPrompt = `${prompt}\n\n---\nWhen you are finished, you have to run: cursor-sub-agents complete ${agentId} "your optional return message here"\nThis command will wait for orchestrator approval before completing. You can also run this somewhere during your implementation to check that you are on track! THIS IS ESSENTIAL OTHERWISE YOUR CODE CANNOT BE VERIFIED. DO NOT FINISH WITHOUT RUNNING THIS COMMAND.`;
-  const encodedPrompt = urlEncode(completionPrompt);
+  delaySeconds: number = 0,
+  followUpPrompts?: string[]
+): Promise<void> {
+  // Use only the original prompt in the URL (no appended completion instructions)
+  const encodedPrompt = urlEncode(prompt);
   const url = `https://cursor.com/link/prompt?text=${encodedPrompt}`;
 
-  // Sequential pattern: open link -> wait 2s -> press Enter -> wait 2s -> press Enter -> wait 2s (then next agent)
-  // Each agent gets: open at delaySeconds, Enter1 at delaySeconds+2, Enter2 at delaySeconds+4, then wait 2s before next
+  // Get follow-up prompts (from parameter, config files, env var, or defaults)
+  const followUps = followUpPrompts || (await getFollowUpPromptsAsync(agentId));
+
+  // Sequential pattern: open link -> wait 2s -> Enter -> wait 2s -> Enter -> wait 2s -> follow-up prompts
+  // Each agent gets: open at delaySeconds, Enter1 at delaySeconds+2, Enter2 at delaySeconds+4, then follow-ups
   const openDelay = delaySeconds;
   const enter1Delay = delaySeconds + 2;
   const enter2Delay = delaySeconds + 4;
+  let currentDelay = delaySeconds + 6; // Start follow-ups after the two Enters
 
   // Open URL at scheduled time
   if (openDelay > 0) {
@@ -184,6 +387,23 @@ export function spawnAgent(
     detached: true,
     stdio: "ignore",
   }).unref();
+
+  // Send follow-up prompts via osascript keystrokes
+  followUps.forEach((followUp, index) => {
+    const followUpDelay = currentDelay + index * 2; // 2 seconds between each follow-up
+    // Escape special characters for osascript AppleScript string
+    // In AppleScript strings, we need to escape backslashes and quotes
+    const escapedPrompt = followUp
+      .replace(/\\/g, "\\\\") // Escape backslashes first
+      .replace(/"/g, '\\"'); // Escape double quotes
+    // Use osascript with proper AppleScript syntax - keystroke accepts text directly
+    // We use double quotes in the shell command and escape them properly in AppleScript
+    const followUpScript = `sleep ${followUpDelay} && osascript -e 'tell application "System Events" to keystroke "${escapedPrompt}"' && sleep 2 && osascript -e 'tell application "System Events" to keystroke return'`;
+    spawn("/opt/homebrew/bin/zsh", ["-c", followUpScript], {
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+  });
 }
 
 export function findAgentById(

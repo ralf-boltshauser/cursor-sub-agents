@@ -107,18 +107,52 @@ csa add-command
 
 The `use-subagents` template provides instructions for splitting tasks into independent components and using sub-agents effectively.
 
+### Configuration Management
+
+- `cursor-sub-agents config` or `cursor-sub-agents config show` - Show current configuration
+- `cursor-sub-agents config add <prompt> [--global]` - Add a follow-up prompt (local by default)
+- `cursor-sub-agents config remove <index> [--global]` - Remove a prompt by index (1-based)
+- `cursor-sub-agents config reorder <from> <to> [--global]` - Move a prompt to a new position
+- `cursor-sub-agents config set <prompt1> [prompt2] ... [--global]` - Overwrite all prompts
+- `cursor-sub-agents config copy-global` - Copy global config to local
+- `cursor-sub-agents config clear [--global]` - Clear all prompts
+- `cursor-sub-agents config use-global` - Delete local config (use global)
+
+**Configuration Files:**
+- **Global**: `~/.csa/config.json` (applies to all projects)
+- **Local**: `./.csa/config.json` (project-specific, takes precedence)
+
+**Example:**
+```bash
+# Show current config
+csa config show
+
+# Add a custom follow-up prompt
+csa config add "Run tests before completing"
+
+# Set multiple prompts at once
+csa config set "Verify your changes" "Run tests" "Execute csa complete {agentId}"
+
+# Copy global config to local project
+csa config copy-global
+```
+
+The `{agentId}` placeholder in prompts will be automatically replaced with each agent's unique ID.
+
 ## Features
 
 - ✅ **Parallel Agent Execution** - Spawn multiple agents simultaneously
 - ✅ **Feedback Loops** - Orchestrator can approve or request changes
 - ✅ **Session Management** - Track multiple sessions across projects
-- ✅ **State Persistence** - Global state file (`~/.cursor-agents/state.json`)
+- ✅ **State Persistence** - Global state file (`~/.csa/state.json`)
 - ✅ **File Locking** - Safe concurrent access with proper-lockfile
 - ✅ **File Watching** - Efficient change detection (no polling)
 - ✅ **Timeout Handling** - Configurable timeouts for agent operations
 - ✅ **Status Monitoring** - Real-time status of all agents
 - ✅ **JSON Output** - Machine-readable output for programmatic use
 - ✅ **Cursor Command Templates** - Pre-written commands for common workflows
+- ✅ **Follow-up Prompts** - Automatically send follow-up prompts to agents via prompt queues
+- ✅ **Config Management** - Manage follow-up prompts via CLI with local/global config support
 
 ## How It Works
 
@@ -130,11 +164,17 @@ The `use-subagents` template provides instructions for splitting tasks into inde
 6. **Sub-agents** can resubmit after making changes
 7. Process repeats until all agents are approved
 
-## State File
+## State and Configuration Files
 
-State is stored globally at: `~/.cursor-agents/state.json`
+**State File:**
+- Stored globally at: `~/.csa/state.json`
+- All sessions and agents share this state file, allowing cross-project visibility
 
-All sessions and agents share this state file, allowing cross-project visibility.
+**Configuration Files:**
+- **Global config**: `~/.csa/config.json` - Applies to all projects
+- **Local config**: `./.csa/config.json` - Project-specific (takes precedence over global)
+- Local config is automatically created when you use `csa config` commands
+- If no config exists, default follow-up prompts are used
 
 ## Requirements
 

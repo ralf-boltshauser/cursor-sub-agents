@@ -1,5 +1,5 @@
 node_modules/
 dist/
-.cursor-agents/
+.csa/
 *.log
 .DS_Store

@@ -1,0 +1,6 @@
+{
+  "followUpPrompts": [
+    "Verify if the changes you have implemented are actually working and align with the instructions provided",
+    "please complete your work by executing ```csa complete {agentId}```"
+  ]
+}
