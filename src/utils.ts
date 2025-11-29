@@ -147,6 +147,22 @@ export interface ConfigFile {
   followUpPrompts: string[];
 }
 
+// Default follow-up prompts (DRY - defined once, used everywhere)
+const DEFAULT_FOLLOW_UP_PROMPTS = [
+  "Verify if the changes you have implemented are actually working and align with the instructions provided!",
+  "to hand off your work run the following command: csa complete {agentId}",
+];
+
+export function getDefaultPromptsArray(): string[] {
+  return [...DEFAULT_FOLLOW_UP_PROMPTS];
+}
+
+function getDefaultPrompts(agentId: string): string[] {
+  return DEFAULT_FOLLOW_UP_PROMPTS.map((prompt) =>
+    prompt.replace(/{agentId}/g, agentId)
+  );
+}
+
 const GLOBAL_CONFIG_FILE = path.join(STATE_DIR, "config.json");
 const LOCAL_CONFIG_FILE = path.join(process.cwd(), ".csa", "config.json");
 
@@ -224,10 +240,7 @@ export async function getActiveConfig(): Promise<{
   // Return defaults
   return {
     config: {
-      followUpPrompts: [
-        "Verify if the changes you have implemented are actually working and align with the instructions provided",
-        "please complete your work by executing ```csa complete {agentId}```",
-      ],
+      followUpPrompts: DEFAULT_FOLLOW_UP_PROMPTS,
     },
     source: "default",
     path: "",
@@ -285,10 +298,7 @@ export function getFollowUpPrompts(
 
   // If called synchronously (for backward compatibility), return defaults
   // Otherwise, this will be handled by the async version
-  return [
-    "Verify if the changes you have implemented are actually working and align with the instructions provided",
-    `please complete your work by executing \`\`\`csa complete ${agentId}\`\`\``,
-  ];
+  return getDefaultPrompts(agentId);
 }
 
 export async function getFollowUpPromptsAsync(
@@ -334,10 +344,7 @@ export async function getFollowUpPromptsAsync(
   }
 
   // Return defaults
-  return [
-    "Verify if the changes you have implemented are actually working and align with the instructions provided",
-    `please complete your work by executing \`\`\`csa complete ${agentId}\`\`\``,
-  ];
+  return getDefaultPrompts(agentId);
 }
 
 export async function spawnAgent(
@@ -355,6 +362,7 @@ export async function spawnAgent(
 
   // Sequential pattern: open link -> wait 2s -> Enter -> wait 2s -> Enter -> wait 2s -> follow-up prompts
   // Each agent gets: open at delaySeconds, Enter1 at delaySeconds+2, Enter2 at delaySeconds+4, then follow-ups
+  // Each follow-up takes 4 seconds: 1s to type + 1s delay + 2s before next
   const openDelay = delaySeconds;
   const enter1Delay = delaySeconds + 2;
   const enter2Delay = delaySeconds + 4;
@@ -389,17 +397,33 @@ export async function spawnAgent(
   }).unref();
 
   // Send follow-up prompts via osascript keystrokes
+  // Each prompt: type text -> wait -> press Enter -> wait before next
   followUps.forEach((followUp, index) => {
-    const followUpDelay = currentDelay + index * 2; // 2 seconds between each follow-up
+    const typeDelay = currentDelay + index * 4; // Start typing at this time
+    // Estimate typing time: ~0.1s per 10 characters, minimum 0.5s
+    const typingTime = Math.max(0.5, followUp.length * 0.01);
+    const enterDelay = typeDelay + typingTime; // Press Enter after typing completes
+
     // Escape special characters for osascript AppleScript string
-    // In AppleScript strings, we need to escape backslashes and quotes
+    // AppleScript uses backslash escaping within double-quoted strings
     const escapedPrompt = followUp
       .replace(/\\/g, "\\\\") // Escape backslashes first
-      .replace(/"/g, '\\"'); // Escape double quotes
-    // Use osascript with proper AppleScript syntax - keystroke accepts text directly
-    // We use double quotes in the shell command and escape them properly in AppleScript
-    const followUpScript = `sleep ${followUpDelay} && osascript -e 'tell application "System Events" to keystroke "${escapedPrompt}"' && sleep 2 && osascript -e 'tell application "System Events" to keystroke return'`;
-    spawn("/opt/homebrew/bin/zsh", ["-c", followUpScript], {
+      .replace(/"/g, '\\"') // Escape double quotes
+      .replace(/\$/g, "\\$"); // Escape dollar signs for shell
+
+    // Type the prompt text using osascript
+    // Use a single keystroke command for the entire string
+    const typeScript = `sleep ${typeDelay} && osascript -e 'tell application "System Events" to keystroke "${escapedPrompt}"'`;
+    spawn("/opt/homebrew/bin/zsh", ["-c", typeScript], {
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+
+    // Press Enter after typing completes
+    const enterScript = `sleep ${enterDelay.toFixed(
+      2
+    )} && osascript -e 'tell application "System Events" to keystroke return'`;
+    spawn("/opt/homebrew/bin/zsh", ["-c", enterScript], {
       detached: true,
       stdio: "ignore",
     }).unref();

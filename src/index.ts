@@ -11,6 +11,7 @@ import {
   interactiveConfig,
   removePrompt,
   reorderPrompt,
+  resetConfig,
   setPrompts,
   showConfig,
   useGlobal,
@@ -168,6 +169,14 @@ configCommand
   .option("-g, --global", "Clear global config instead of local")
   .action(async (options?: { global?: boolean }) => {
     await clearConfig(options?.global || false);
+  });
+
+configCommand
+  .command("reset")
+  .description("Reset config to default prompts")
+  .option("-g, --global", "Reset global config instead of local")
+  .action(async (options?: { global?: boolean }) => {
+    await resetConfig(options?.global || false);
   });
 
 configCommand

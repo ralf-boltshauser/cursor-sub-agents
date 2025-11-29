@@ -3,6 +3,7 @@ import readline from "readline";
 import {
   deleteConfig,
   getActiveConfig,
+  getDefaultPromptsArray,
   getGlobalConfigPath,
   getLocalConfigPath,
   loadConfig,
@@ -259,6 +260,32 @@ async function clearConfigInteractive(): Promise<void> {
   console.log(chalk.green(`\n✅ Cleared ${location} config\n`));
 }
 
+async function resetConfigInteractive(): Promise<void> {
+  const isGlobal = (await getConfigLocation()) === "global";
+  const configPath = isGlobal
+    ? await getGlobalConfigPath()
+    : await getLocalConfigPath();
+
+  const confirm = await question(
+    chalk.yellow(`Are you sure you want to reset ${isGlobal ? "global" : "local"} config to defaults? (y/N): `)
+  );
+  if (confirm.toLowerCase().trim() !== "y") {
+    console.log(chalk.gray("Cancelled."));
+    return;
+  }
+
+  const defaultPrompts = getDefaultPromptsArray();
+  const config: ConfigFile = { followUpPrompts: defaultPrompts };
+  await saveConfig(configPath, config);
+
+  const location = isGlobal ? "global" : "local";
+  console.log(
+    chalk.green(
+      `\n✅ Reset ${location} config to defaults (${defaultPrompts.length} prompt(s))\n`
+    )
+  );
+}
+
 async function useGlobalInteractive(): Promise<void> {
   const localPath = await getLocalConfigPath();
   const localConfig = await loadConfig(localPath);
@@ -421,6 +448,23 @@ export async function clearConfig(isGlobal: boolean): Promise<void> {
   console.log(chalk.green(`\n✅ Cleared ${location} config\n`));
 }
 
+export async function resetConfig(isGlobal: boolean): Promise<void> {
+  const configPath = isGlobal
+    ? await getGlobalConfigPath()
+    : await getLocalConfigPath();
+
+  const defaultPrompts = getDefaultPromptsArray();
+  const config: ConfigFile = { followUpPrompts: defaultPrompts };
+  await saveConfig(configPath, config);
+
+  const location = isGlobal ? "global" : "local";
+  console.log(
+    chalk.green(
+      `\n✅ Reset ${location} config to defaults (${defaultPrompts.length} prompt(s))\n`
+    )
+  );
+}
+
 export async function useGlobal(): Promise<void> {
   const localPath = await getLocalConfigPath();
   await deleteConfig(localPath);
@@ -442,12 +486,13 @@ export async function interactiveConfig(): Promise<void> {
     console.log(chalk.gray("  4. Set all prompts"));
     console.log(chalk.gray("  5. Copy global to local"));
     console.log(chalk.gray("  6. Clear config"));
-    console.log(chalk.gray("  7. Use global config"));
-    console.log(chalk.gray("  8. Refresh view"));
-    console.log(chalk.gray("  9. Exit"));
+    console.log(chalk.gray("  7. Reset config to defaults"));
+    console.log(chalk.gray("  8. Use global config"));
+    console.log(chalk.gray("  9. Refresh view"));
+    console.log(chalk.gray("  10. Exit"));
     console.log();
 
-    const choice = await question(chalk.yellow("Select an action (1-9): "));
+    const choice = await question(chalk.yellow("Select an action (1-10): "));
     const choiceNum = parseInt(choice.trim(), 10);
 
     console.log();
@@ -472,16 +517,19 @@ export async function interactiveConfig(): Promise<void> {
         await clearConfigInteractive();
         break;
       case 7:
-        await useGlobalInteractive();
+        await resetConfigInteractive();
         break;
       case 8:
-        // Just refresh by continuing the loop
+        await useGlobalInteractive();
         break;
       case 9:
+        // Just refresh by continuing the loop
+        break;
+      case 10:
         console.log(chalk.gray("Exiting..."));
         return;
       default:
-        console.log(chalk.red("Invalid choice. Please select 1-9."));
+        console.log(chalk.red("Invalid choice. Please select 1-10."));
     }
   }
 }

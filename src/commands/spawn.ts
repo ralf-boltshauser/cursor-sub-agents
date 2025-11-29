@@ -58,15 +58,15 @@ export async function spawnAgents(prompts: string[]): Promise<string> {
 
   // Spawn all agents sequentially with proper timing
   // Pattern per agent: open link -> wait 2s -> Enter -> wait 2s -> Enter -> wait 2s -> follow-up prompts
-  // Each follow-up prompt takes 2 seconds (typing + enter)
-  // Calculate total time per agent: 6s (base) + 2s per follow-up
+  // Each follow-up prompt takes 4 seconds: 1s typing + 1s delay + 2s before next
+  // Calculate total time per agent: 6s (base) + 4s per follow-up
   console.log(chalk.blue("\n📡 Spawning agents...\n"));
 
   // Get follow-up prompts count for delay calculation (use first agent's prompts as reference)
   const { getFollowUpPromptsAsync } = await import("../utils.js");
   const followUpCount = (await getFollowUpPromptsAsync(agents[0]?.id || ""))
     .length;
-  const timePerAgent = 6 + followUpCount * 2; // 6s base + 2s per follow-up
+  const timePerAgent = 6 + followUpCount * 4; // 6s base + 4s per follow-up
 
   for (const [index, agent] of agents.entries()) {
     // Each agent starts after previous completes
