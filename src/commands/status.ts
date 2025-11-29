@@ -2,7 +2,7 @@ import { loadState, getRepositoryIdentifier, cleanupOldSessions } from '../utils
 import chalk from 'chalk';
 import { AgentState } from '../types.js';
 
-export async function listStatus(): Promise<void> {
+export async function listStatus(sessionId?: string): Promise<void> {
   // Clean up old sessions before displaying status
   await cleanupOldSessions();
   
@@ -14,7 +14,18 @@ export async function listStatus(): Promise<void> {
     return;
   }
 
-  // Collect all agents from all sessions
+  // Filter sessions if sessionId is provided
+  const targetSessionId = sessionId;
+  const filteredSessions = targetSessionId 
+    ? sessions.filter(([id]) => id === targetSessionId)
+    : sessions;
+
+  if (targetSessionId && filteredSessions.length === 0) {
+    console.log(chalk.red(`Session ${targetSessionId} not found`));
+    return;
+  }
+
+  // Collect all agents from filtered sessions
   const allAgents: Array<{
     id: string;
     startedAt: string;
@@ -26,7 +37,7 @@ export async function listStatus(): Promise<void> {
     feedback?: string;
   }> = [];
 
-  for (const [sessionId, session] of sessions) {
+  for (const [sessionId, session] of filteredSessions) {
     for (const agent of session.agents) {
       allAgents.push({
         id: agent.id,

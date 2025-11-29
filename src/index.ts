@@ -15,7 +15,7 @@ const program = new Command();
 program
   .name("cursor-sub-agents")
   .description("Manage multiple Cursor sub-agents in parallel")
-  .version("1.1.0");
+  .version("1.1.3");
 
 program
   .command("spawn")
@@ -73,8 +73,9 @@ program
   .command("status")
   .alias("list")
   .description("List all sessions and their agents")
-  .action(async () => {
-    await listStatus();
+  .argument("[sessionId]", "Optional session ID to filter by")
+  .action(async (sessionId?: string) => {
+    await listStatus(sessionId);
   });
 
 program

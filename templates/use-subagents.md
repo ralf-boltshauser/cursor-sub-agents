@@ -5,6 +5,8 @@ Split the tasks you've received into multiple components that can be run indepen
 
 ## Instructions File
 Put the detailed instructions for each agent into a file in .csa/<parent-task-name>/<agent-sub-task>.md
+Add .csa to your .gitignore file if not already there.
+
 Each file has to contain: 
 
 - The overarching goal of the orchestrator agent
@@ -40,6 +42,10 @@ For running in sequence, you just wait until they are finished and then run the 
 - Ensure tasks are **independent** - they should not depend on each other to run in parallel
 - For sequential tasks, wait for one batch to complete before spawning the next
 - Each agent will wait for approval before completing their work
-- Use `csa status` to monitor all active sessions and agents
 - **The workflow is iterative**: After spawning, use `csa wait` to be notified when agents finish, then verify each one immediately. You don't need to wait for all agents to complete before starting verification
 
+## Immediate next steps
+
+1. Write instruction files
+2. Spawn agents (Execute the command yourself)
+3. Wait for agents (this part is essential, don't forget this!)
