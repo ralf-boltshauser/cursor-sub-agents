@@ -1,12 +1,13 @@
 {
   "name": "cursor-sub-agents",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "CLI tool for spawning and managing multiple Cursor sub-agents in parallel with feedback loops",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
     "cursor-sub-agents": "dist/index.js",
-    "csa": "dist/index.js"
+    "csa": "dist/index.js",
+    "csa-local": "dist/index.js"
   },
   "files": [
     "dist",

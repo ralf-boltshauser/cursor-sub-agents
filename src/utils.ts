@@ -696,33 +696,62 @@ function executeOsascript(applescript: string): Promise<void> {
   });
 }
 
-// Self-Prompt Scheduling - Now fully synchronous
+// Self-Prompt Scheduling - Using stdin to avoid shell escaping issues
+// This is more reliable for complex text with quotes and special characters
 export async function scheduleSelfPrompt(
   text: string,
   isCommand: boolean = false
 ): Promise<void> {
-  // Use keystroke for everything - properly escape for AppleScript string
-  // Since we're using stdin, we only need to escape for AppleScript, not shell
-  // Use single quotes for AppleScript string - escape single quotes as '' and backslashes
+  // Escape for AppleScript string (inside double quotes)
+  // Only need to escape for AppleScript, not shell (since we use stdin)
   const escapedText = text
     .replace(/\\/g, "\\\\") // Escape backslashes first
-    .replace(/'/g, "''") // Escape single quotes as '' in AppleScript
+    .replace(/"/g, '\\"') // Escape double quotes for AppleScript
     .replace(/\n/g, "\\n") // Handle newlines
     .replace(/\r/g, "\\r") // Handle carriage returns
     .replace(/\t/g, "\\t"); // Handle tabs
 
-  // Type the text using keystroke
-  // Pass AppleScript via stdin to avoid shell escaping issues
-  // Use single quotes for the AppleScript string (double quotes inside are literal)
-  const applescript = `tell application "System Events" to keystroke '${escapedText}'`;
-  await executeOsascript(applescript);
+  // Use stdin to pass AppleScript directly - avoids all shell escaping issues
+  const applescript = `tell application "System Events" to keystroke "${escapedText}"`;
+
+  // Execute synchronously using spawnSync with stdin
+  const { spawnSync } = await import("child_process");
+  const typeResult = spawnSync("osascript", ["-"], {
+    input: applescript,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (typeResult.error) {
+    throw new Error(`Failed to type text: ${typeResult.error.message}`);
+  }
+  if (typeResult.status !== 0) {
+    const stderr = typeResult.stderr?.toString() || "";
+    throw new Error(
+      `osascript failed with code ${typeResult.status}: ${stderr}`
+    );
+  }
 
   // Wait after typing to ensure it's registered
   await sleep(500);
 
   // First Enter (select command or submit prompt)
   const enter1Script = `tell application "System Events" to keystroke return`;
-  await executeOsascript(enter1Script);
+  const enter1Result = spawnSync("osascript", ["-"], {
+    input: enter1Script,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (enter1Result.error) {
+    throw new Error(`Failed to press Enter: ${enter1Result.error.message}`);
+  }
+  if (enter1Result.status !== 0) {
+    const stderr = enter1Result.stderr?.toString() || "";
+    throw new Error(
+      `osascript failed with code ${enter1Result.status}: ${stderr}`
+    );
+  }
 
   // Wait after first Enter
   await sleep(1000);
@@ -730,7 +759,21 @@ export async function scheduleSelfPrompt(
   // Second Enter (only for commands, to submit)
   if (isCommand) {
     const enter2Script = `tell application "System Events" to keystroke return`;
-    await executeOsascript(enter2Script);
+    const enter2Result = spawnSync("osascript", ["-"], {
+      input: enter2Script,
+      stdio: "pipe",
+      encoding: "utf8",
+    });
+
+    if (enter2Result.error) {
+      throw new Error(`Failed to press Enter: ${enter2Result.error.message}`);
+    }
+    if (enter2Result.status !== 0) {
+      const stderr = enter2Result.stderr?.toString() || "";
+      throw new Error(
+        `osascript failed with code ${enter2Result.status}: ${stderr}`
+      );
+    }
 
     // Wait after second Enter
     await sleep(1000);

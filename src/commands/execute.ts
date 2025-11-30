@@ -7,9 +7,9 @@ import {
   validateCommandsExist,
 } from "../utils.js";
 
-export async function executeJob(jobId: string): Promise<void> {
+export async function scheduleJob(jobId: string): Promise<void> {
   try {
-    console.log(chalk.blue(`\n🚀 Executing job: ${chalk.bold(jobId)}\n`));
+    console.log(chalk.blue(`\n📅 Scheduling job: ${chalk.bold(jobId)}\n`));
 
     // Load job
     const job = await loadJob(jobId);
@@ -72,22 +72,22 @@ export async function executeJob(jobId: string): Promise<void> {
           : `You are expected to read the following files:\n${filesList}`;
       const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.`;
 
-      // Execute kickoff prompt (waits for completion)
+      // Schedule kickoff prompt (waits for completion)
       console.log(chalk.blue("   📤 Sending kickoff prompt..."));
       await scheduleSelfPrompt(kickoffPrompt, false);
 
       // Wait between kickoff and first command
-      await sleep(2000);
+      await sleep(1000);
 
-      // Execute each command sequentially (waits for each to complete)
+      // Schedule each command sequentially (waits for each to complete)
       for (const [cmdIndex, command] of commands.entries()) {
         const commandText = `/${command}`;
-        console.log(chalk.blue(`   📤 Executing: ${commandText}`));
+        console.log(chalk.blue(`   📤 Scheduling: ${commandText}`));
         await scheduleSelfPrompt(commandText, true);
 
         // Wait between commands (except after the last one)
         if (cmdIndex < commands.length - 1) {
-          await sleep(2000);
+          await sleep(1000);
         }
       }
 
@@ -96,11 +96,13 @@ export async function executeJob(jobId: string): Promise<void> {
       // Wait between tasks (except after the last one)
       if (taskIndex < job.tasks.length - 1) {
         console.log(chalk.gray("   ⏳ Waiting before next task..."));
-        await sleep(2000);
+        await sleep(1000);
       }
     }
 
-    console.log(chalk.blue(`\n✅ Job execution completed!\n`));
+    console.log(
+      chalk.blue(`\n✅ Job scheduled! All prompts have been sent to Cursor.\n`)
+    );
   } catch (error) {
     console.error(
       chalk.red(

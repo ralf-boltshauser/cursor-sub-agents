@@ -18,7 +18,7 @@ import {
 } from "./commands/config.js";
 import { completeAgent } from "./commands/complete.js";
 import { listCommands } from "./commands/commands.js";
-import { executeJob } from "./commands/execute.js";
+import { scheduleJob } from "./commands/execute.js";
 import { feedbackAgent } from "./commands/feedback.js";
 import { spawnAgents } from "./commands/spawn.js";
 import { listStatus } from "./commands/status.js";
@@ -107,11 +107,11 @@ program
   });
 
 program
-  .command("execute")
-  .description("Execute a job by scheduling sequential Cursor commands")
-  .argument("<jobId>", "Job ID to execute")
+  .command("schedule")
+  .description("Schedule a job by sending sequential Cursor commands")
+  .argument("<jobId>", "Job ID to schedule")
   .action(async (jobId: string) => {
-    await executeJob(jobId);
+    await scheduleJob(jobId);
   });
 
 program
