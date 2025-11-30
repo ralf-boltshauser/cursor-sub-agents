@@ -1,6 +1,6 @@
 {
   "name": "cursor-sub-agents",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "CLI tool for spawning and managing multiple Cursor sub-agents in parallel with feedback loops",
   "type": "module",
   "main": "./dist/index.js",

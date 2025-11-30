@@ -4,6 +4,8 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { acceptAgent } from "./commands/accept.js";
 import { addCommand } from "./commands/add-command.js";
+import { listCommands } from "./commands/commands.js";
+import { completeAgent } from "./commands/complete.js";
 import {
   addPrompt,
   clearConfig,
@@ -16,10 +18,9 @@ import {
   showConfig,
   useGlobal,
 } from "./commands/config.js";
-import { completeAgent } from "./commands/complete.js";
-import { listCommands } from "./commands/commands.js";
 import { scheduleJob } from "./commands/execute.js";
 import { feedbackAgent } from "./commands/feedback.js";
+import { spawnAgentsWithJobs } from "./commands/spawn-jobs.js";
 import { spawnAgents } from "./commands/spawn.js";
 import { listStatus } from "./commands/status.js";
 import { validateTasks } from "./commands/validate-tasks.js";
@@ -38,6 +39,18 @@ program
   .argument("<prompts...>", "One or more prompts to execute in parallel")
   .action(async (prompts: string[]) => {
     const sessionId = await spawnAgents(prompts);
+    // Output session ID for scripting
+    console.log(chalk.gray(`\nSession ID: ${sessionId}`));
+  });
+
+program
+  .command("spawn-jobs")
+  .description(
+    "Spawn agents using job files (one agent per job, opens new windows)"
+  )
+  .argument("<jobIds...>", "One or more job IDs to spawn")
+  .action(async (jobIds: string[]) => {
+    const sessionId = await spawnAgentsWithJobs(jobIds);
     // Output session ID for scripting
     console.log(chalk.gray(`\nSession ID: ${sessionId}`));
   });
@@ -175,7 +188,10 @@ configCommand
 configCommand
   .command("set")
   .description("Set/overwrite all follow-up prompts")
-  .argument("<prompts...>", "One or more prompts (space-separated, use quotes for multi-word)")
+  .argument(
+    "<prompts...>",
+    "One or more prompts (space-separated, use quotes for multi-word)"
+  )
   .option("-g, --global", "Set global config instead of local")
   .action(async (prompts: string[], options?: { global?: boolean }) => {
     await setPrompts(prompts, options?.global || false);

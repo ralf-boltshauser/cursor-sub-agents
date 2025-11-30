@@ -779,3 +779,135 @@ export async function scheduleSelfPrompt(
     await sleep(1000);
   }
 }
+
+// Spawn Agent with Job - Opens new Cursor window and executes job tasks sequentially
+// Uses await/sleep pattern for reliable sequential execution (like scheduleJob)
+export async function spawnAgentWithJob(
+  jobId: string,
+  agentId: string
+): Promise<void> {
+  // Load the job
+  const job = await loadJob(jobId);
+
+  // Use job goal as the initial prompt
+  const encodedPrompt = urlEncode(job.goal);
+  const url = `https://cursor.com/link/prompt?text=${encodedPrompt}`;
+
+  // Open URL in new Cursor window
+  const { spawnSync } = await import("child_process");
+  const openResult = spawnSync("open", [url], {
+    stdio: "pipe",
+  });
+
+  if (openResult.error) {
+    throw new Error(`Failed to open URL: ${openResult.error.message}`);
+  }
+
+  // Wait for Cursor window to open and be ready
+  await sleep(2000);
+
+  // Ensure Cursor is the active application and window is focused
+  // This helps ensure keystrokes go to the correct window
+  const activateScript = `tell application "Cursor" to activate`;
+  const activateResult = spawnSync("osascript", ["-"], {
+    input: activateScript,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (activateResult.error) {
+    // Non-fatal - continue anyway
+    console.warn("Warning: Could not activate Cursor window");
+  }
+
+  await sleep(500);
+
+  // Submit the initial prompt (Enter twice - same pattern as spawnAgent)
+  const enter1Script = `tell application "System Events" to keystroke return`;
+  const enter1Result = spawnSync("osascript", ["-"], {
+    input: enter1Script,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (enter1Result.error) {
+    throw new Error(`Failed to press Enter: ${enter1Result.error.message}`);
+  }
+  if (enter1Result.status !== 0) {
+    const stderr = enter1Result.stderr?.toString() || "";
+    throw new Error(
+      `osascript failed with code ${enter1Result.status}: ${stderr}`
+    );
+  }
+
+  await sleep(2000);
+
+  // Second Enter to submit
+  const enter2Script = `tell application "System Events" to keystroke return`;
+  const enter2Result = spawnSync("osascript", ["-"], {
+    input: enter2Script,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (enter2Result.error) {
+    throw new Error(`Failed to press Enter: ${enter2Result.error.message}`);
+  }
+  if (enter2Result.status !== 0) {
+    const stderr = enter2Result.stderr?.toString() || "";
+    throw new Error(
+      `osascript failed with code ${enter2Result.status}: ${stderr}`
+    );
+  }
+
+  await sleep(2000);
+
+  // Now execute all tasks from the job sequentially (using await/sleep pattern)
+  for (const [taskIndex, task] of job.tasks.entries()) {
+    // Get commands for this task type
+    const commands = await getTaskTypeCommands(task.type);
+
+    if (commands.length === 0) {
+      continue; // Skip tasks with no commands
+    }
+
+    // Validate all commands exist
+    const missing = await validateCommandsExist(commands);
+    if (missing.length > 0) {
+      continue; // Skip tasks with missing commands
+    }
+
+    // Create kickoff prompt
+    const filesList =
+      task.files.length === 1
+        ? task.files[0]
+        : task.files.map((f, i) => `${i + 1}. ${f}`).join("\n");
+    const filesInstruction =
+      task.files.length === 1
+        ? `You are expected to read ${task.files[0]}.`
+        : `You are expected to read the following files:\n${filesList}`;
+    const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.`;
+
+    // Schedule kickoff prompt (waits for completion)
+    await scheduleSelfPrompt(kickoffPrompt, false);
+
+    // Wait between kickoff and first command
+    await sleep(1000);
+
+    // Schedule each command sequentially (waits for each to complete)
+    for (const [cmdIndex, command] of commands.entries()) {
+      const commandText = `/${command}`;
+      await scheduleSelfPrompt(commandText, true);
+
+      // Wait between commands (except after the last one)
+      if (cmdIndex < commands.length - 1) {
+        await sleep(1000);
+      }
+    }
+
+    // Wait between tasks (except after the last one)
+    if (taskIndex < job.tasks.length - 1) {
+      await sleep(1000);
+    }
+  }
+}
