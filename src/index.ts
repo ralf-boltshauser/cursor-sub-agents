@@ -17,9 +17,12 @@ import {
   useGlobal,
 } from "./commands/config.js";
 import { completeAgent } from "./commands/complete.js";
+import { listCommands } from "./commands/commands.js";
+import { executeJob } from "./commands/execute.js";
 import { feedbackAgent } from "./commands/feedback.js";
 import { spawnAgents } from "./commands/spawn.js";
 import { listStatus } from "./commands/status.js";
+import { validateTasks } from "./commands/validate-tasks.js";
 import { waitForAgents } from "./commands/wait.js";
 
 const program = new Command();
@@ -27,7 +30,7 @@ const program = new Command();
 program
   .name("cursor-sub-agents")
   .description("Manage multiple Cursor sub-agents in parallel")
-  .version("1.2.0");
+  .version("1.4.0");
 
 program
   .command("spawn")
@@ -94,6 +97,28 @@ program
   .description("Install a Cursor command template")
   .action(async () => {
     await addCommand();
+  });
+
+program
+  .command("commands")
+  .description("Open ~/.cursor/commands folder")
+  .action(async () => {
+    await listCommands();
+  });
+
+program
+  .command("execute")
+  .description("Execute a job by scheduling sequential Cursor commands")
+  .argument("<jobId>", "Job ID to execute")
+  .action(async (jobId: string) => {
+    await executeJob(jobId);
+  });
+
+program
+  .command("validate-tasks")
+  .description("Validate that all commands in task-types.json exist")
+  .action(async () => {
+    await validateTasks();
   });
 
 // Config commands

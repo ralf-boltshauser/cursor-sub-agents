@@ -23,3 +23,16 @@ export interface AgentsRegistry {
     };
   };
 }
+
+export interface Task {
+  name: string;
+  type: string;
+  file: string;
+  prompt: string;
+}
+
+export interface Job {
+  id: string;
+  goal: string;
+  tasks: Task[];
+}

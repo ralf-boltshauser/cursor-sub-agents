@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import lockfile from "proper-lockfile";
-import { AgentState, AgentsRegistry } from "./types.js";
+import { AgentState, AgentsRegistry, Job } from "./types.js";
 
 const STATE_DIR = path.join(os.homedir(), ".csa");
 export const STATE_FILE = path.join(STATE_DIR, "state.json");
@@ -519,5 +519,186 @@ export async function cleanupOldSessions(): Promise<number> {
     // In production, you might want to log this to a file or monitoring service
     console.error("Error during session cleanup:", error);
     return 0;
+  }
+}
+
+// Task Types Configuration
+export interface TaskTypeMapping {
+  [taskType: string]: string[];
+}
+
+const TASK_TYPES_FILE = path.join(STATE_DIR, "task-types.json");
+
+const DEFAULT_TASK_TYPES: TaskTypeMapping = {
+  "fix-issue": ["research", "plan-fix", "implement", "review"],
+  implement: [
+    "understand",
+    "implement",
+    "fix-issues",
+    "review",
+    "e2e-test",
+    "update-plan",
+  ],
+  research: ["research", "document"],
+  "identify-issues": ["analyze", "identify", "document"],
+};
+
+export async function ensureTaskTypesFile(): Promise<void> {
+  try {
+    await ensureStateDir();
+    try {
+      await fs.access(TASK_TYPES_FILE);
+      // File exists, don't overwrite
+    } catch {
+      // File doesn't exist, create with defaults
+      await saveTaskTypes(DEFAULT_TASK_TYPES);
+    }
+  } catch (error) {
+    // Ignore errors during initialization
+  }
+}
+
+export async function loadTaskTypes(): Promise<TaskTypeMapping> {
+  await ensureTaskTypesFile();
+  try {
+    const content = await fs.readFile(TASK_TYPES_FILE, "utf-8");
+    const taskTypes = JSON.parse(content) as TaskTypeMapping;
+    if (taskTypes && typeof taskTypes === "object") {
+      return taskTypes;
+    }
+    return DEFAULT_TASK_TYPES;
+  } catch {
+    return DEFAULT_TASK_TYPES;
+  }
+}
+
+export async function saveTaskTypes(taskTypes: TaskTypeMapping): Promise<void> {
+  await ensureStateDir();
+  const content = JSON.stringify(taskTypes, null, 2);
+  await fs.writeFile(TASK_TYPES_FILE, content, "utf-8");
+}
+
+export async function getTaskTypeCommands(taskType: string): Promise<string[]> {
+  const taskTypes = await loadTaskTypes();
+  return taskTypes[taskType] || [];
+}
+
+// Command Validation
+const GLOBAL_COMMANDS_DIR = path.join(os.homedir(), ".cursor", "commands");
+const PROJECT_COMMANDS_DIR = path.join(process.cwd(), ".cursor", "commands");
+
+async function commandExists(command: string): Promise<boolean> {
+  const globalCommandFile = path.join(GLOBAL_COMMANDS_DIR, `${command}.md`);
+  const projectCommandFile = path.join(PROJECT_COMMANDS_DIR, `${command}.md`);
+
+  try {
+    // Check global first
+    await fs.access(globalCommandFile);
+    return true;
+  } catch {
+    // Check project
+    try {
+      await fs.access(projectCommandFile);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export async function validateCommandsExist(
+  commands: string[]
+): Promise<string[]> {
+  const missing: string[] = [];
+  for (const command of commands) {
+    if (!(await commandExists(command))) {
+      missing.push(command);
+    }
+  }
+  return missing;
+}
+
+// Job Utilities
+const JOBS_DIR = path.join(process.cwd(), ".csa", "jobs");
+
+export async function ensureJobDir(jobId: string): Promise<string> {
+  const jobDir = path.join(JOBS_DIR, jobId);
+  try {
+    await fs.mkdir(jobDir, { recursive: true });
+  } catch {
+    // Directory might already exist, ignore
+  }
+  return jobDir;
+}
+
+export async function loadJob(jobId: string): Promise<Job> {
+  const jobFile = path.join(JOBS_DIR, jobId, "job.json");
+  try {
+    const content = await fs.readFile(jobFile, "utf-8");
+    const job = JSON.parse(content) as Job;
+    if (job && job.id && job.goal && Array.isArray(job.tasks)) {
+      return job;
+    }
+    throw new Error("Invalid job.json structure");
+  } catch (error) {
+    throw new Error(
+      `Failed to load job ${jobId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+}
+
+export async function saveJob(jobId: string, job: Job): Promise<void> {
+  await ensureJobDir(jobId);
+  const jobFile = path.join(JOBS_DIR, jobId, "job.json");
+  const content = JSON.stringify(job, null, 2);
+  await fs.writeFile(jobFile, content, "utf-8");
+}
+
+// Self-Prompt Scheduling
+export function scheduleSelfPrompt(
+  text: string,
+  delaySeconds: number,
+  isCommand: boolean = false
+): void {
+  // For commands (like /research), we type the command, then press Enter twice
+  // For regular prompts, we type the text, then press Enter once
+  const typeDelay = delaySeconds;
+  const typingTime = Math.max(0.5, text.length * 0.01);
+  const enter1Delay = typeDelay + typingTime + 0.5; // First Enter (select command or submit)
+  const enter2Delay = isCommand ? enter1Delay + 1 : null; // Second Enter (submit command, only for commands)
+
+  // Escape special characters for osascript AppleScript string
+  const escapedText = text
+    .replace(/\\/g, "\\\\") // Escape backslashes first
+    .replace(/"/g, '\\"') // Escape double quotes
+    .replace(/\$/g, "\\$"); // Escape dollar signs for shell
+
+  // Type the text
+  const typeScript = `sleep ${typeDelay} && osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
+  spawn("/opt/homebrew/bin/zsh", ["-c", typeScript], {
+    detached: true,
+    stdio: "ignore",
+  }).unref();
+
+  // First Enter (select command or submit prompt)
+  const enter1Script = `sleep ${enter1Delay.toFixed(
+    2
+  )} && osascript -e 'tell application "System Events" to keystroke return'`;
+  spawn("/opt/homebrew/bin/zsh", ["-c", enter1Script], {
+    detached: true,
+    stdio: "ignore",
+  }).unref();
+
+  // Second Enter (only for commands, to submit)
+  if (isCommand && enter2Delay !== null) {
+    const enter2Script = `sleep ${enter2Delay.toFixed(
+      2
+    )} && osascript -e 'tell application "System Events" to keystroke return'`;
+    spawn("/opt/homebrew/bin/zsh", ["-c", enter2Script], {
+      detached: true,
+      stdio: "ignore",
+    }).unref();
   }
 }
