@@ -2,19 +2,19 @@ import chalk from "chalk";
 import {
   loadTaskTypes,
   validateCommandsExist,
-  ensureTaskTypesFile,
+  ensureGlobalTaskTypesFile,
 } from "../utils.js";
 
 export async function validateTasks(): Promise<void> {
   try {
-    // Ensure task-types.json exists (creates with defaults if missing)
-    await ensureTaskTypesFile();
+    // Ensure global task-types.json exists (creates with defaults if missing)
+    await ensureGlobalTaskTypesFile();
 
     // Load task types
     const taskTypes = await loadTaskTypes();
 
     if (Object.keys(taskTypes).length === 0) {
-      console.error(chalk.red("Error: No task types found in ~/.csa/task-types.json"));
+      console.error(chalk.red("Error: No task types found"));
       process.exit(1);
     }
 

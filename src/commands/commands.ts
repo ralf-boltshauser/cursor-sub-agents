@@ -6,7 +6,7 @@ import readline from "readline";
 import {
   loadTaskTypes,
   validateCommandsExist,
-  ensureTaskTypesFile,
+  ensureGlobalTaskTypesFile,
 } from "../utils.js";
 
 const GLOBAL_COMMANDS_DIR = path.join(os.homedir(), ".cursor", "commands");
@@ -39,7 +39,7 @@ export async function listCommands(): Promise<void> {
     console.log(chalk.yellow(`cd ${GLOBAL_COMMANDS_DIR}\n`));
 
     // Check for missing commands
-    await ensureTaskTypesFile();
+    await ensureGlobalTaskTypesFile();
     const taskTypes = await loadTaskTypes();
 
     // Get all unique commands from all task types

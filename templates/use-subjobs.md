@@ -88,7 +88,8 @@ For a complex feature that needs research and implementation:
 - **Independent tasks**: Ensure tasks are independent when running in parallel
 - **Sequential tasks**: For dependent tasks, wait for one batch to complete before spawning the next
 - **Job structure**: Each job can have multiple tasks that execute sequentially
-- **Task types**: Use `csa validate-tasks` to see available task types and their command sequences
+- **Task types**: Use `csa task-types list` to see available task types and their command sequences
+- **Validate commands**: Use `csa task-types validate` to check that all commands exist
 - **Parallel execution**: Each agent runs in their own Cursor window, allowing true parallel work
 
 ## Differences from `use-subagents`

@@ -23,7 +23,15 @@ import { feedbackAgent } from "./commands/feedback.js";
 import { spawnAgentsWithJobs } from "./commands/spawn-jobs.js";
 import { spawnAgents } from "./commands/spawn.js";
 import { listStatus } from "./commands/status.js";
-import { validateTasks } from "./commands/validate-tasks.js";
+import {
+  addTaskType,
+  editTaskType,
+  interactiveTaskTypes,
+  listTaskTypes,
+  removeTaskType,
+  showTaskType,
+  validateTaskTypes,
+} from "./commands/task-types.js";
 import { waitForAgents } from "./commands/wait.js";
 
 const program = new Command();
@@ -127,12 +135,75 @@ program
     await scheduleJob(jobId);
   });
 
-program
-  .command("validate-tasks")
+// Task Types Management
+const taskTypesCommand = program
+  .command("task-types")
+  .description("Manage task types (interactive mode if no subcommand)");
+
+taskTypesCommand
+  .command("list")
+  .description("List all task types (global + project)")
+  .action(async () => {
+    await listTaskTypes();
+  });
+
+taskTypesCommand
+  .command("show")
+  .description("Show details of a specific task type")
+  .argument("<name>", "Task type name")
+  .action(async (name: string) => {
+    await showTaskType(name);
+  });
+
+taskTypesCommand
+  .command("add")
+  .description("Add a new task type")
+  .argument("<name>", "Task type name")
+  .argument("[commands...]", "Command sequence (space-separated)")
+  .option("-g, --global", "Add to global config instead of project")
+  .action(
+    async (
+      name: string,
+      commands: string[],
+      options?: { global?: boolean }
+    ) => {
+      await addTaskType(
+        name,
+        commands.length > 0 ? commands : undefined,
+        options?.global || false
+      );
+    }
+  );
+
+taskTypesCommand
+  .command("remove")
+  .description("Remove a task type")
+  .argument("<name>", "Task type name")
+  .option("-g, --global", "Remove from global config instead of project")
+  .action(async (name: string, options?: { global?: boolean }) => {
+    await removeTaskType(name, options?.global || false);
+  });
+
+taskTypesCommand
+  .command("edit")
+  .description("Edit an existing task type")
+  .argument("<name>", "Task type name")
+  .option("-g, --global", "Edit in global config instead of project")
+  .action(async (name: string, options?: { global?: boolean }) => {
+    await editTaskType(name, options?.global || false);
+  });
+
+taskTypesCommand
+  .command("validate")
   .description("Validate that all commands in task-types.json exist")
   .action(async () => {
-    await validateTasks();
+    await validateTaskTypes();
   });
+
+// Default action: interactive mode
+taskTypesCommand.action(async () => {
+  await interactiveTaskTypes();
+});
 
 // Config commands
 const configCommand = program

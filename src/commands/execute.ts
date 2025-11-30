@@ -54,7 +54,9 @@ export async function scheduleJob(jobId: string): Promise<void> {
           )
         );
         console.error(
-          chalk.gray(`      Run 'csa validate-tasks' to check all task types.`)
+          chalk.gray(
+            `      Run 'csa task-types validate' to check all task types.`
+          )
         );
         continue;
       }

@@ -24,11 +24,16 @@ Each task type has a predefined sequence of Cursor commands that will be schedul
 
 **To see all available task types and their command sequences**, run:
 ```bash
-csa validate-tasks
+csa task-types list
+```
+
+**To validate that all commands exist**, run:
+```bash
+csa task-types validate
 ```
 
 This will show you:
-- All task types defined in `~/.csa/task-types.json`
+- All task types (global + project)
 - The sequence of commands each task type executes
 - Whether all required command files exist
 
@@ -199,7 +204,8 @@ Each command in the sequence will be sent to Cursor automatically, allowing you 
 - **Use descriptive names**: Task names should clearly describe what they do
 - **Reference specific files**: Include all relevant files in the `files` array for context
 - **Chain tasks**: Use research → implement, or identify-issues → implement patterns
-- **Check task types**: Run `csa validate-tasks` to see all available task types and their command sequences
+- **List task types**: Run `csa task-types list` to see all available task types and their command sequences
+- **Validate commands**: Run `csa task-types validate` to check that all commands exist
 - **Reuse research**: Save research findings in the job directory (e.g., `.csa/jobs/{jobId}/research-notes.md`) and reference them in subsequent tasks
 
 
