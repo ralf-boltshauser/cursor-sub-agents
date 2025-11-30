@@ -662,16 +662,21 @@ export function sleep(ms: number): Promise<void> {
 }
 
 // Execute osascript command and wait for it to complete
-function executeOsascript(script: string): Promise<void> {
+// Use stdin to pass AppleScript to avoid shell escaping issues
+function executeOsascript(applescript: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const process = spawn("/opt/homebrew/bin/zsh", ["-c", script], {
-      stdio: ["ignore", "pipe", "pipe"],
+    const process = spawn("osascript", ["-"], {
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     let stderr = "";
     process.stderr?.on("data", (data) => {
       stderr += data.toString();
     });
+
+    // Write AppleScript to stdin
+    process.stdin?.write(applescript);
+    process.stdin?.end();
 
     process.on("close", (code) => {
       if (code === 0) {
@@ -696,29 +701,25 @@ export async function scheduleSelfPrompt(
   text: string,
   isCommand: boolean = false
 ): Promise<void> {
-  // Use keystroke for everything - properly escape for AppleScript
-  // We need to escape for both shell and AppleScript context
-  // Since we're using single quotes around the osascript command,
-  // we need to escape quotes and backslashes for AppleScript string
+  // Use keystroke for everything - properly escape for AppleScript string
+  // Since we're using stdin, we only need to escape for AppleScript, not shell
   const escapedText = text
-    .replace(/\\/g, "\\\\") // Escape backslashes first (for AppleScript)
-    .replace(/"/g, '\\"') // Escape double quotes (for AppleScript string)
-    .replace(/\$/g, "\\$") // Escape dollar signs (for shell, though in single quotes it's safe)
+    .replace(/\\/g, "\\\\") // Escape backslashes first
+    .replace(/"/g, '\\"') // Escape double quotes
     .replace(/\n/g, "\\n") // Handle newlines
     .replace(/\r/g, "\\r") // Handle carriage returns
     .replace(/\t/g, "\\t"); // Handle tabs
 
   // Type the text using keystroke
-  // Using single quotes around osascript command so shell doesn't interpret variables
-  // The escapedText is already interpolated by JavaScript template literal
-  const typeScript = `osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
-  await executeOsascript(typeScript);
+  // Pass AppleScript via stdin to avoid shell escaping issues
+  const applescript = `tell application "System Events" to keystroke "${escapedText}"`;
+  await executeOsascript(applescript);
 
   // Wait after typing to ensure it's registered
   await sleep(500);
 
   // First Enter (select command or submit prompt)
-  const enter1Script = `osascript -e 'tell application "System Events" to keystroke return'`;
+  const enter1Script = `tell application "System Events" to keystroke return`;
   await executeOsascript(enter1Script);
 
   // Wait after first Enter
@@ -726,7 +727,7 @@ export async function scheduleSelfPrompt(
 
   // Second Enter (only for commands, to submit)
   if (isCommand) {
-    const enter2Script = `osascript -e 'tell application "System Events" to keystroke return'`;
+    const enter2Script = `tell application "System Events" to keystroke return`;
     await executeOsascript(enter2Script);
 
     // Wait after second Enter

@@ -30,7 +30,7 @@ const program = new Command();
 program
   .name("cursor-sub-agents")
   .description("Manage multiple Cursor sub-agents in parallel")
-  .version("1.5.1");
+  .version("1.5.2");
 
 program
   .command("spawn")
