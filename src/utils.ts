@@ -665,14 +665,23 @@ export function sleep(ms: number): Promise<void> {
 function executeOsascript(script: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const process = spawn("/opt/homebrew/bin/zsh", ["-c", script], {
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stderr = "";
+    process.stderr?.on("data", (data) => {
+      stderr += data.toString();
     });
 
     process.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`osascript exited with code ${code}`));
+        reject(
+          new Error(
+            `osascript exited with code ${code}${stderr ? `: ${stderr}` : ""}`
+          )
+        );
       }
     });
 
@@ -687,13 +696,21 @@ export async function scheduleSelfPrompt(
   text: string,
   isCommand: boolean = false
 ): Promise<void> {
-  // Escape special characters for osascript AppleScript string
+  // Use keystroke for everything - properly escape for AppleScript
+  // We need to escape for both shell and AppleScript context
+  // Since we're using single quotes around the osascript command,
+  // we need to escape quotes and backslashes for AppleScript string
   const escapedText = text
-    .replace(/\\/g, "\\\\") // Escape backslashes first
-    .replace(/"/g, '\\"') // Escape double quotes
-    .replace(/\$/g, "\\$"); // Escape dollar signs for shell
+    .replace(/\\/g, "\\\\") // Escape backslashes first (for AppleScript)
+    .replace(/"/g, '\\"') // Escape double quotes (for AppleScript string)
+    .replace(/\$/g, "\\$") // Escape dollar signs (for shell, though in single quotes it's safe)
+    .replace(/\n/g, "\\n") // Handle newlines
+    .replace(/\r/g, "\\r") // Handle carriage returns
+    .replace(/\t/g, "\\t"); // Handle tabs
 
-  // Type the text
+  // Type the text using keystroke
+  // Using single quotes around osascript command so shell doesn't interpret variables
+  // The escapedText is already interpolated by JavaScript template literal
   const typeScript = `osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
   await executeOsascript(typeScript);
 
