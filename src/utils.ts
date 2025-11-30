@@ -703,16 +703,18 @@ export async function scheduleSelfPrompt(
 ): Promise<void> {
   // Use keystroke for everything - properly escape for AppleScript string
   // Since we're using stdin, we only need to escape for AppleScript, not shell
+  // Use single quotes for AppleScript string - escape single quotes as '' and backslashes
   const escapedText = text
     .replace(/\\/g, "\\\\") // Escape backslashes first
-    .replace(/"/g, '\\"') // Escape double quotes
+    .replace(/'/g, "''") // Escape single quotes as '' in AppleScript
     .replace(/\n/g, "\\n") // Handle newlines
     .replace(/\r/g, "\\r") // Handle carriage returns
     .replace(/\t/g, "\\t"); // Handle tabs
 
   // Type the text using keystroke
   // Pass AppleScript via stdin to avoid shell escaping issues
-  const applescript = `tell application "System Events" to keystroke "${escapedText}"`;
+  // Use single quotes for the AppleScript string (double quotes inside are literal)
+  const applescript = `tell application "System Events" to keystroke '${escapedText}'`;
   await executeOsascript(applescript);
 
   // Wait after typing to ensure it's registered
