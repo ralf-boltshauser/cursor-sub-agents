@@ -10,6 +10,7 @@ import {
   ensureGlobalTaskTypesFile,
   ensureProjectTaskTypesDir,
   TaskTypeMapping,
+  getCommandLocation,
 } from "../utils.js";
 
 // Validate all task types and their commands
@@ -119,36 +120,57 @@ export async function listTaskTypes(): Promise<void> {
     return;
   }
 
-  // Show global task types
-  if (Object.keys(globalTypes).length > 0) {
-    console.log(chalk.yellow("  Global (available in all projects):"));
-    for (const [name, commands] of Object.entries(globalTypes)) {
-      const isOverridden = name in projectTypes;
-      const marker = isOverridden ? chalk.gray(" (overridden by project)") : "";
-      console.log(
-        chalk.gray(`    • ${chalk.bold(name)}: ${commands.join(" → ")}${marker}`)
-      );
-    }
-    console.log();
-  }
-
-  // Show project task types
-  if (Object.keys(projectTypes).length > 0) {
-    console.log(chalk.yellow("  Project (this project only):"));
-    for (const [name, commands] of Object.entries(projectTypes)) {
-      console.log(
-        chalk.gray(`    • ${chalk.bold(name)}: ${commands.join(" → ")}`)
-      );
-    }
-    console.log();
-  }
-
-  // Show merged (what's actually used)
-  console.log(chalk.green("  Active (merged, project overrides global):"));
+  // Show merged (what's actually used) with detailed info
+  console.log(chalk.green("Active Task Types (project overrides global):\n"));
+  
   for (const [name, commands] of Object.entries(mergedTypes)) {
-    const source = name in projectTypes ? "project" : "global";
+    const taskTypeSource = name in projectTypes ? "project" : "global";
+    const taskTypeSourceColor = taskTypeSource === "project" ? chalk.cyan : chalk.yellow;
+    
+    console.log(chalk.bold(`  ${name}`));
+    console.log(chalk.gray(`    Type: ${taskTypeSourceColor(taskTypeSource)}`));
+    console.log(chalk.gray(`    Commands:`));
+    
+    // Show each command with its location on separate lines
+    for (const [index, cmd] of commands.entries()) {
+      const cmdLocation = await getCommandLocation(cmd);
+      const isLast = index === commands.length - 1;
+      const prefix = isLast ? "    └─ " : "    ├─ ";
+      
+      if (cmdLocation === null) {
+        console.log(chalk.gray(prefix) + chalk.red(`${chalk.bold(cmd)} (missing)`));
+      } else {
+        const cmdColor = cmdLocation === "project" ? chalk.cyan : chalk.yellow;
+        console.log(chalk.gray(prefix) + `${chalk.bold(cmd)} ${cmdColor(`[${cmdLocation}]`)}`);
+      }
+    }
+    
+    console.log();
+  }
+
+  // Show summary
+  const globalTaskCount = Object.keys(globalTypes).length;
+  const projectTaskCount = Object.keys(projectTypes).length;
+  const overriddenCount = Object.keys(projectTypes).filter(
+    (name) => name in globalTypes
+  ).length;
+
+  console.log(chalk.gray("Summary:"));
+  console.log(
+    chalk.gray(
+      `  • Global task types: ${chalk.yellow(globalTaskCount.toString())}`
+    )
+  );
+  console.log(
+    chalk.gray(
+      `  • Project task types: ${chalk.cyan(projectTaskCount.toString())}`
+    )
+  );
+  if (overriddenCount > 0) {
     console.log(
-      chalk.gray(`    • ${chalk.bold(name)}: ${commands.join(" → ")} ${chalk.dim(`[${source}]`)}`)
+      chalk.gray(
+        `  • Overridden by project: ${chalk.cyan(overriddenCount.toString())}`
+      )
     );
   }
   console.log();

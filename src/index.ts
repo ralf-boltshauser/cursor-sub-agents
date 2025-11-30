@@ -32,6 +32,7 @@ import {
   showTaskType,
   validateTaskTypes,
 } from "./commands/task-types.js";
+import { validateJob } from "./commands/validate-job.js";
 import { waitForAgents } from "./commands/wait.js";
 
 const program = new Command();
@@ -133,6 +134,14 @@ program
   .argument("<jobId>", "Job ID to schedule")
   .action(async (jobId: string) => {
     await scheduleJob(jobId);
+  });
+
+program
+  .command("validate-job")
+  .description("Validate a job.json file (structure, task types, commands)")
+  .argument("<jobId>", "Job ID to validate")
+  .action(async (jobId: string) => {
+    await validateJob(jobId);
   });
 
 // Task Types Management

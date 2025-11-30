@@ -685,6 +685,26 @@ async function commandExists(command: string): Promise<boolean> {
   }
 }
 
+// Check where a command is defined: "global", "project", or null if missing
+export async function getCommandLocation(
+  command: string
+): Promise<"global" | "project" | null> {
+  const globalCommandFile = path.join(GLOBAL_COMMANDS_DIR, `${command}.md`);
+  const projectCommandFile = path.join(PROJECT_COMMANDS_DIR, `${command}.md`);
+
+  try {
+    await fs.access(globalCommandFile);
+    return "global";
+  } catch {
+    try {
+      await fs.access(projectCommandFile);
+      return "project";
+    } catch {
+      return null;
+    }
+  }
+}
+
 export async function validateCommandsExist(
   commands: string[]
 ): Promise<string[]> {
@@ -941,20 +961,101 @@ export async function spawnAgentWithJob(
 
   await sleep(2000);
 
-  // Now execute all tasks from the job sequentially (using await/sleep pattern)
+  // Validate all tasks upfront before starting execution
+  const allTaskTypes = await loadTaskTypes();
+  const taskErrors: Array<{
+    taskIndex: number;
+    taskName: string;
+    error: string;
+  }> = [];
+
   for (const [taskIndex, task] of job.tasks.entries()) {
+    // Validate task type exists
+    if (!(task.type in allTaskTypes)) {
+      taskErrors.push({
+        taskIndex: taskIndex + 1,
+        taskName: task.name,
+        error: `Task type "${task.type}" not found`,
+      });
+      continue;
+    }
+
+    // Get commands for this task type
+    const commands = await getTaskTypeCommands(task.type);
+    if (commands.length === 0) {
+      taskErrors.push({
+        taskIndex: taskIndex + 1,
+        taskName: task.name,
+        error: `Task type "${task.type}" has no commands defined`,
+      });
+      continue;
+    }
+
+    // Validate all commands exist
+    const missing = await validateCommandsExist(commands);
+    if (missing.length > 0) {
+      taskErrors.push({
+        taskIndex: taskIndex + 1,
+        taskName: task.name,
+        error: `Missing commands: ${missing.join(", ")}`,
+      });
+      continue;
+    }
+  }
+
+  // Report all errors if any
+  if (taskErrors.length > 0) {
+    console.error(
+      `\n❌ Validation failed for agent ${agentId}! Found errors in the following tasks:\n`
+    );
+    for (const error of taskErrors) {
+      console.error(
+        `  Task ${error.taskIndex} (${error.taskName}): ${error.error}`
+      );
+    }
+    console.error(
+      `\n  Run 'csa validate-job ${jobId}' to validate the job before spawning.\n`
+    );
+    throw new Error(
+      `Job validation failed: ${taskErrors.length} task(s) have errors`
+    );
+  }
+
+  // Now execute all tasks from the job sequentially (using await/sleep pattern)
+  console.log(`\n📋 Executing ${job.tasks.length} task(s) from job...\n`);
+
+  for (const [taskIndex, task] of job.tasks.entries()) {
+    console.log(
+      `\n📌 Task ${taskIndex + 1}/${job.tasks.length}: ${task.name} (type: ${
+        task.type
+      })`
+    );
+
     // Get commands for this task type
     const commands = await getTaskTypeCommands(task.type);
 
     if (commands.length === 0) {
+      console.warn(
+        `⚠️  Skipping task "${task.name}": Task type "${task.type}" not found or has no commands.`
+      );
+      console.warn(
+        `   Available task types: Run 'csa task-types list' to see all available types.`
+      );
       continue; // Skip tasks with no commands
     }
 
     // Validate all commands exist
     const missing = await validateCommandsExist(commands);
     if (missing.length > 0) {
+      console.warn(
+        `⚠️  Skipping task "${task.name}": Missing commands: ${missing.join(
+          ", "
+        )}`
+      );
       continue; // Skip tasks with missing commands
     }
+
+    console.log(`   Commands: ${commands.join(" → ")}`);
 
     // Create kickoff prompt
     const filesList =
@@ -985,10 +1086,13 @@ export async function spawnAgentWithJob(
     }
 
     // Wait between tasks (except after the last one)
+    console.log(`   ✅ Task ${taskIndex + 1} scheduled`);
     if (taskIndex < job.tasks.length - 1) {
       await sleep(1000);
     }
   }
+
+  console.log(`\n✅ All tasks scheduled for agent ${agentId}\n`);
 
   // Append final prompt to tell agent to complete their work
   const completePrompt = `\n\nExecute this command to hand in your work: csa complete ${agentId}`;

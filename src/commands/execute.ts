@@ -2,10 +2,17 @@ import chalk from "chalk";
 import {
   getTaskTypeCommands,
   loadJob,
+  loadTaskTypes,
   scheduleSelfPrompt,
   sleep,
   validateCommandsExist,
 } from "../utils.js";
+
+interface TaskValidationError {
+  taskIndex: number;
+  taskName: string;
+  error: string;
+}
 
 export async function scheduleJob(jobId: string): Promise<void> {
   try {
@@ -20,6 +27,119 @@ export async function scheduleJob(jobId: string): Promise<void> {
       console.error(chalk.red("Error: Job has no tasks"));
       process.exit(1);
     }
+
+    // Validate all tasks upfront before starting execution
+    console.log(chalk.blue("🔍 Validating all tasks before scheduling...\n"));
+    const errors: TaskValidationError[] = [];
+    const allTaskTypes = await loadTaskTypes();
+
+    for (const [taskIndex, task] of job.tasks.entries()) {
+      // Validate task structure
+      if (!task.name) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: "unnamed",
+          error: "Task missing 'name' field",
+        });
+        continue;
+      }
+      if (!task.type) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: task.name,
+          error: "Task missing 'type' field",
+        });
+        continue;
+      }
+      if (!Array.isArray(task.files)) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: task.name,
+          error: "Task 'files' must be an array",
+        });
+        continue;
+      }
+      if (!task.prompt) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: task.name,
+          error: "Task missing 'prompt' field",
+        });
+        continue;
+      }
+
+      // Validate task type exists
+      if (!(task.type in allTaskTypes)) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: task.name,
+          error: `Task type "${
+            task.type
+          }" not found. Available types: ${Object.keys(allTaskTypes).join(
+            ", "
+          )}`,
+        });
+        continue;
+      }
+
+      // Get commands for this task type
+      const commands = await getTaskTypeCommands(task.type);
+      if (commands.length === 0) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: task.name,
+          error: `Task type "${task.type}" has no commands defined`,
+        });
+        continue;
+      }
+
+      // Validate all commands exist
+      const missing = await validateCommandsExist(commands);
+      if (missing.length > 0) {
+        errors.push({
+          taskIndex: taskIndex + 1,
+          taskName: task.name,
+          error: `Missing commands: ${missing.join(", ")}`,
+        });
+        continue;
+      }
+    }
+
+    // Report all errors if any
+    if (errors.length > 0) {
+      console.error(
+        chalk.red(
+          "\n❌ Validation failed! Found errors in the following tasks:\n"
+        )
+      );
+      for (const error of errors) {
+        console.error(
+          chalk.red(
+            `  Task ${error.taskIndex} (${chalk.bold(error.taskName)}): ${
+              error.error
+            }`
+          )
+        );
+      }
+      console.error(
+        chalk.gray(
+          `\n  Run 'csa task-types list' to see all available task types`
+        )
+      );
+      console.error(
+        chalk.gray(
+          `  Run 'csa task-types validate' to check all task types and commands`
+        )
+      );
+      console.error(
+        chalk.gray(
+          `  Run 'csa validate-job ${jobId}' for detailed validation\n`
+        )
+      );
+      process.exit(1);
+    }
+
+    console.log(chalk.green("✅ All tasks validated successfully!\n"));
 
     // Process each task sequentially
     for (const [taskIndex, task] of job.tasks.entries()) {

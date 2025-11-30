@@ -37,6 +37,17 @@ This will show you:
 - The sequence of commands each task type executes
 - Whether all required command files exist
 
+**To validate a specific job file**, run:
+```bash
+csa validate-job {jobId}
+```
+
+This will check:
+- Job structure (id, goal, tasks array)
+- Each task has required fields (name, type, files, prompt)
+- Task types exist and are valid
+- All commands for each task type exist
+
 ## Job File Location
 
 Save your job file at: `.csa/jobs/{jobId}/job.json`
@@ -185,7 +196,8 @@ Here's a complete example combining multiple patterns:
 1. **Break down the work**: Identify all tasks needed to complete the goal
 2. **Choose task types**: Select appropriate task types for each task
 3. **Create job.json**: Write the job file with all tasks
-4. **Schedule**: Run `csa schedule {jobId}` to schedule the job
+4. **Validate**: Run `csa validate-job {jobId}` to check if the job is valid
+5. **Schedule**: Run `csa schedule {jobId}` to schedule the job
 
 ## Task Execution
 
@@ -206,6 +218,7 @@ Each command in the sequence will be sent to Cursor automatically, allowing you 
 - **Chain tasks**: Use research → implement, or identify-issues → implement patterns
 - **List task types**: Run `csa task-types list` to see all available task types and their command sequences
 - **Validate commands**: Run `csa task-types validate` to check that all commands exist
+- **Validate your job**: Run `csa validate-job {jobId}` before scheduling to catch errors early
 - **Reuse research**: Save research findings in the job directory (e.g., `.csa/jobs/{jobId}/research-notes.md`) and reference them in subsequent tasks
 
 

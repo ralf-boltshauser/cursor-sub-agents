@@ -117,7 +117,7 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
     chalk.yellow(
       `\n⏳ Now wait for sub-jobs to report with: ${chalk.bold(
         `csa wait ${sessionId}`
-      )}\n`
+      )}\nYou have to execute this command!\n`
     )
   );
 
