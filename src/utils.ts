@@ -910,4 +910,9 @@ export async function spawnAgentWithJob(
       await sleep(1000);
     }
   }
+
+  // Append final prompt to tell agent to complete their work
+  const completePrompt = `\n\nExecute this command to hand in your work: csa complete ${agentId}`;
+  await scheduleSelfPrompt(completePrompt, false);
+  await sleep(1000);
 }

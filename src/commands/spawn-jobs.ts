@@ -4,11 +4,11 @@ import {
   cleanupOldSessions,
   generateAgentId,
   generateSessionId,
+  loadJob,
   loadState,
   saveState,
-  spawnAgentWithJob,
-  loadJob,
   sleep,
+  spawnAgentWithJob,
 } from "../utils.js";
 
 export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
@@ -45,16 +45,18 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
 
       console.log(
         chalk.gray(
-          `  • Agent ${chalk.bold(agentId)} (${chalk.bold(jobId)}): ${job.goal.substring(0, 60)}${
-            job.goal.length > 60 ? "..." : ""
-          }`
+          `  • Agent ${chalk.bold(agentId)} (${chalk.bold(
+            jobId
+          )}): ${job.goal.substring(0, 60)}${job.goal.length > 60 ? "..." : ""}`
         )
       );
       console.log(chalk.gray(`     Tasks: ${job.tasks.length}`));
     } catch (error) {
       console.error(
         chalk.red(
-          `  ❌ Failed to load job ${jobId}: ${error instanceof Error ? error.message : String(error)}`
+          `  ❌ Failed to load job ${jobId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         )
       );
     }
@@ -82,7 +84,9 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
 
     console.log(
       chalk.yellow(
-        `\n📋 Spawning agent ${chalk.bold(agent.id)} with job ${chalk.bold(jobId)}...`
+        `\n📋 Spawning agent ${chalk.bold(agent.id)} with job ${chalk.bold(
+          jobId
+        )}...`
       )
     );
 
@@ -95,7 +99,9 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
     } catch (error) {
       console.error(
         chalk.red(
-          `  ❌ Failed to spawn agent ${agent.id}: ${error instanceof Error ? error.message : String(error)}`
+          `  ❌ Failed to spawn agent ${agent.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         )
       );
     }
@@ -109,12 +115,11 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
 
   console.log(
     chalk.yellow(
-      `\n⏳ To wait for agents: ${chalk.bold(
-        `cursor-sub-agents wait ${sessionId}`
+      `\n⏳ Now wait for sub-jobs to report with: ${chalk.bold(
+        `csa wait ${sessionId}`
       )}\n`
     )
   );
 
   return sessionId;
 }
-
