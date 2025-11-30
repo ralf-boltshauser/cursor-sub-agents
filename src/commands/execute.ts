@@ -1,9 +1,10 @@
 import chalk from "chalk";
 import {
-  loadJob,
   getTaskTypeCommands,
-  validateCommandsExist,
+  loadJob,
   scheduleSelfPrompt,
+  sleep,
+  validateCommandsExist,
 } from "../utils.js";
 
 export async function executeJob(jobId: string): Promise<void> {
@@ -20,24 +21,17 @@ export async function executeJob(jobId: string): Promise<void> {
       process.exit(1);
     }
 
-    // Calculate timing
-    // Each action takes time: type text, wait, Enter, wait
-    // Kickoff: type (~1s) + wait (0.5s) + Enter + wait (1s) + Enter + wait (2s) = ~4.5s
-    // Command: type (~0.5s) + wait (0.5s) + Enter + wait (1s) + Enter + wait (2s) = ~4s
-    const KICKOFF_TIME = 4.5;
-    const COMMAND_TIME = 4.0;
-
-    let currentDelay = 0;
-
-    // Process each task
+    // Process each task sequentially
     for (const [taskIndex, task] of job.tasks.entries()) {
       console.log(
         chalk.yellow(
-          `\n📋 Task ${taskIndex + 1}/${job.tasks.length}: ${chalk.bold(task.name)}`
+          `\n📋 Task ${taskIndex + 1}/${job.tasks.length}: ${chalk.bold(
+            task.name
+          )}`
         )
       );
       console.log(chalk.gray(`   Type: ${task.type}`));
-      console.log(chalk.gray(`   File: ${task.file}`));
+      console.log(chalk.gray(`   Files: ${task.files.join(", ")}`));
 
       // Get commands for this task type
       const commands = await getTaskTypeCommands(task.type);
@@ -60,48 +54,53 @@ export async function executeJob(jobId: string): Promise<void> {
           )
         );
         console.error(
-          chalk.gray(
-            `      Run 'csa validate-tasks' to check all task types.`
-          )
+          chalk.gray(`      Run 'csa validate-tasks' to check all task types.`)
         );
         continue;
       }
 
-      console.log(
-        chalk.gray(`   Commands: ${commands.join(" → ")}`)
-      );
+      console.log(chalk.gray(`   Commands: ${commands.join(" → ")}`));
 
-      // Create kickoff prompt
-      const kickoffPrompt = `You have the following task: ${task.prompt}. You are expected to read ${task.file}. Task type: ${task.type}.`;
+      // Create kickoff prompt with all files
+      const filesList =
+        task.files.length === 1
+          ? task.files[0]
+          : task.files.map((f, i) => `${i + 1}. ${f}`).join("\n");
+      const filesInstruction =
+        task.files.length === 1
+          ? `You are expected to read ${task.files[0]}.`
+          : `You are expected to read the following files:\n${filesList}`;
+      const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.`;
 
-      // Schedule kickoff prompt
-      scheduleSelfPrompt(kickoffPrompt, currentDelay, false);
-      currentDelay += KICKOFF_TIME;
+      // Execute kickoff prompt (waits for completion)
+      console.log(chalk.blue("   📤 Sending kickoff prompt..."));
+      await scheduleSelfPrompt(kickoffPrompt, false);
 
-      // Schedule each command
-      for (const command of commands) {
+      // Wait between kickoff and first command
+      await sleep(2000);
+
+      // Execute each command sequentially (waits for each to complete)
+      for (const [cmdIndex, command] of commands.entries()) {
         const commandText = `/${command}`;
-        scheduleSelfPrompt(commandText, currentDelay, true);
-        currentDelay += COMMAND_TIME;
+        console.log(chalk.blue(`   📤 Executing: ${commandText}`));
+        await scheduleSelfPrompt(commandText, true);
+
+        // Wait between commands (except after the last one)
+        if (cmdIndex < commands.length - 1) {
+          await sleep(2000);
+        }
       }
 
-      console.log(
-        chalk.green(
-          `   ✅ Scheduled ${commands.length} command(s) starting in ${(currentDelay - commands.length * COMMAND_TIME - KICKOFF_TIME).toFixed(1)}s`
-        )
-      );
+      console.log(chalk.green(`   ✅ Completed ${commands.length} command(s)`));
+
+      // Wait between tasks (except after the last one)
+      if (taskIndex < job.tasks.length - 1) {
+        console.log(chalk.gray("   ⏳ Waiting before next task..."));
+        await sleep(2000);
+      }
     }
 
-    console.log(
-      chalk.blue(
-        `\n⏳ Execution scheduled. Total time: ~${currentDelay.toFixed(1)}s\n`
-      )
-    );
-    console.log(
-      chalk.gray(
-        "💡 Commands will be sent to Cursor sequentially. Make sure Cursor is focused and ready.\n"
-      )
-    );
+    console.log(chalk.blue(`\n✅ Job execution completed!\n`));
   } catch (error) {
     console.error(
       chalk.red(
@@ -111,4 +110,3 @@ export async function executeJob(jobId: string): Promise<void> {
     process.exit(1);
   }
 }
-

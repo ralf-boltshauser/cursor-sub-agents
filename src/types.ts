@@ -27,7 +27,7 @@ export interface AgentsRegistry {
 export interface Task {
   name: string;
   type: string;
-  file: string;
+  files: string[];
   prompt: string;
 }
 

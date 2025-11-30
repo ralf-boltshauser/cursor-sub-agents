@@ -9,7 +9,7 @@ A job consists of:
 - **Tasks**: An array of tasks, each with:
   - `name`: Descriptive name of the task
   - `type`: Task type (see available types below)
-  - `file`: File path to read for context (relative to project root)
+  - `files`: Array of file paths to read for context (relative to project root)
   - `prompt`: Specific instructions for this task
 
 ## Available Task Types
@@ -38,13 +38,13 @@ Where `{jobId}` is a unique identifier for this job (e.g., `fix-auth-bugs`, `imp
     {
       "name": "Fix login bug",
       "type": "fix-issue",
-      "file": "issues.md",
+      "files": ["issues.md"],
       "prompt": "Fix the login bug described in issue #1"
     },
     {
       "name": "Fix session timeout",
       "type": "fix-issue",
-      "file": "issues.md",
+      "files": ["issues.md", "src/auth/session.ts"],
       "prompt": "Fix the session timeout issue #2"
     }
   ]

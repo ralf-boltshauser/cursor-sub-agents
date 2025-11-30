@@ -656,19 +656,37 @@ export async function saveJob(jobId: string, job: Job): Promise<void> {
   await fs.writeFile(jobFile, content, "utf-8");
 }
 
-// Self-Prompt Scheduling
-export function scheduleSelfPrompt(
-  text: string,
-  delaySeconds: number,
-  isCommand: boolean = false
-): void {
-  // For commands (like /research), we type the command, then press Enter twice
-  // For regular prompts, we type the text, then press Enter once
-  const typeDelay = delaySeconds;
-  const typingTime = Math.max(0.5, text.length * 0.01);
-  const enter1Delay = typeDelay + typingTime + 0.5; // First Enter (select command or submit)
-  const enter2Delay = isCommand ? enter1Delay + 1 : null; // Second Enter (submit command, only for commands)
+// Sleep utility that actually waits
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+// Execute osascript command and wait for it to complete
+function executeOsascript(script: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const process = spawn("/opt/homebrew/bin/zsh", ["-c", script], {
+      stdio: "ignore",
+    });
+
+    process.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`osascript exited with code ${code}`));
+      }
+    });
+
+    process.on("error", (error) => {
+      reject(error);
+    });
+  });
+}
+
+// Self-Prompt Scheduling - Now fully synchronous
+export async function scheduleSelfPrompt(
+  text: string,
+  isCommand: boolean = false
+): Promise<void> {
   // Escape special characters for osascript AppleScript string
   const escapedText = text
     .replace(/\\/g, "\\\\") // Escape backslashes first
@@ -676,29 +694,25 @@ export function scheduleSelfPrompt(
     .replace(/\$/g, "\\$"); // Escape dollar signs for shell
 
   // Type the text
-  const typeScript = `sleep ${typeDelay} && osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
-  spawn("/opt/homebrew/bin/zsh", ["-c", typeScript], {
-    detached: true,
-    stdio: "ignore",
-  }).unref();
+  const typeScript = `osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
+  await executeOsascript(typeScript);
+
+  // Wait after typing to ensure it's registered
+  await sleep(500);
 
   // First Enter (select command or submit prompt)
-  const enter1Script = `sleep ${enter1Delay.toFixed(
-    2
-  )} && osascript -e 'tell application "System Events" to keystroke return'`;
-  spawn("/opt/homebrew/bin/zsh", ["-c", enter1Script], {
-    detached: true,
-    stdio: "ignore",
-  }).unref();
+  const enter1Script = `osascript -e 'tell application "System Events" to keystroke return'`;
+  await executeOsascript(enter1Script);
+
+  // Wait after first Enter
+  await sleep(1000);
 
   // Second Enter (only for commands, to submit)
-  if (isCommand && enter2Delay !== null) {
-    const enter2Script = `sleep ${enter2Delay.toFixed(
-      2
-    )} && osascript -e 'tell application "System Events" to keystroke return'`;
-    spawn("/opt/homebrew/bin/zsh", ["-c", enter2Script], {
-      detached: true,
-      stdio: "ignore",
-    }).unref();
+  if (isCommand) {
+    const enter2Script = `osascript -e 'tell application "System Events" to keystroke return'`;
+    await executeOsascript(enter2Script);
+
+    // Wait after second Enter
+    await sleep(1000);
   }
 }
