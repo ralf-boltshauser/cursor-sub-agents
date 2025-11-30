@@ -38,6 +38,59 @@ export async function waitForAgents(sessionId: string): Promise<void> {
     }
     console.log();
     displaySessionStatus(sessionId, session);
+    
+    // Check if there are still running agents
+    const runningAgents = session.agents.filter(
+      agent => agent.status === 'running'
+    );
+    
+    console.log(
+      chalk.yellow(
+        `\n🤖 AUTOMATED WORKFLOW: Review and approve/feedback the pending agent(s), then continue waiting.\n`
+      )
+    );
+    console.log(
+      chalk.blue(
+        `\n📋 Next steps (execute automatically):\n`
+      )
+    );
+    for (const agent of pendingAgents) {
+      console.log(
+        chalk.gray(
+          `  • Review work from agent ${chalk.bold(agent.id)}:\n`
+        )
+      );
+      console.log(
+        chalk.gray(
+          `    - If good: ${chalk.bold(`csa accept ${agent.id}`)}\n`
+        )
+      );
+      console.log(
+        chalk.gray(
+          `    - If changes needed: ${chalk.bold(`csa feedback ${agent.id} "your feedback message"`)}\n`
+        )
+      );
+    }
+    
+    if (runningAgents.length > 0) {
+      console.log(
+        chalk.gray(
+          `  • After reviewing all pending agents, run ${chalk.bold(`csa wait ${sessionId}`)} again to check for more completions\n`
+        )
+      );
+      console.log(
+        chalk.gray(
+          `    (${runningAgents.length} agent(s) still running)\n`
+        )
+      );
+    } else {
+      console.log(
+        chalk.green(
+          `  • After reviewing all pending agents, all agents will be complete!\n`
+        )
+      );
+    }
+    
     return;
   }
 
@@ -89,7 +142,7 @@ export async function waitForAgents(sessionId: string): Promise<void> {
             fs.unwatchFile(STATE_FILE);
           }
           
-          console.log(chalk.blue('\n📋 Agent(s) submitted:\n'));
+          console.log(chalk.blue('\n📋 Agent(s) submitted and pending verification:\n'));
           for (const agent of pending) {
             console.log(chalk.gray(`  • Agent ${chalk.bold(agent.id)}`));
             if (agent.returnMessage) {
@@ -98,6 +151,59 @@ export async function waitForAgents(sessionId: string): Promise<void> {
           }
           console.log();
           displaySessionStatus(sessionId, currentSession);
+          
+          // Check if there are still running agents
+          const runningAgents = currentSession.agents.filter(
+            agent => agent.status === 'running'
+          );
+          
+          console.log(
+            chalk.yellow(
+              `\n🤖 AUTOMATED WORKFLOW: Review and approve/feedback the pending agent(s), then continue waiting.\n`
+            )
+          );
+          console.log(
+            chalk.blue(
+              `\n📋 Next steps (execute automatically):\n`
+            )
+          );
+          for (const agent of pending) {
+            console.log(
+              chalk.gray(
+                `  • Review work from agent ${chalk.bold(agent.id)}:\n`
+              )
+            );
+            console.log(
+              chalk.gray(
+                `    - If good: ${chalk.bold(`csa accept ${agent.id}`)}\n`
+              )
+            );
+            console.log(
+              chalk.gray(
+                `    - If changes needed: ${chalk.bold(`csa feedback ${agent.id} "your feedback message"`)}\n`
+              )
+            );
+          }
+          
+          if (runningAgents.length > 0) {
+            console.log(
+              chalk.gray(
+                `  • After reviewing all pending agents, run ${chalk.bold(`csa wait ${sessionId}`)} again to check for more completions\n`
+              )
+            );
+            console.log(
+              chalk.gray(
+                `    (${runningAgents.length} agent(s) still running)\n`
+              )
+            );
+          } else {
+            console.log(
+              chalk.green(
+                `  • After reviewing all pending agents, all agents will be complete!\n`
+              )
+            );
+          }
+          
           resolve();
         }
       } catch (error) {

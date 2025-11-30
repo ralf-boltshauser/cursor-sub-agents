@@ -1,4 +1,5 @@
 import { loadState, saveState, findAgentById } from '../utils.js';
+import { AgentState } from '../types.js';
 import chalk from 'chalk';
 
 export async function feedbackAgent(agentId: string, feedbackMessage: string): Promise<void> {
@@ -32,5 +33,55 @@ export async function feedbackAgent(agentId: string, feedbackMessage: string): P
   console.log(chalk.gray(`  Message: ${feedbackMessage}`));
   if (agent.returnMessage) {
     console.log(chalk.gray(`  Original message: ${agent.returnMessage}`));
+  }
+  
+  // Check if there are more agents to wait for
+  const session = state.sessions[found.sessionId];
+  if (!session) {
+    return;
+  }
+  
+  const runningAgents = session.agents.filter(
+    (a: AgentState) => a.status === 'running'
+  );
+  const pendingAgents = session.agents.filter(
+    (a: AgentState) => a.status === 'pending_verification'
+  );
+  const allApproved = session.agents.every(
+    (a: AgentState) => a.status === 'approved'
+  );
+  
+  console.log();
+  if (allApproved) {
+    console.log(
+      chalk.green(
+        `\n🎉 All agents approved! Session ${found.sessionId} is complete.\n`
+      )
+    );
+  } else if (pendingAgents.length > 0 || runningAgents.length > 0) {
+    console.log(
+      chalk.yellow(
+        `\n🤖 AUTOMATED WORKFLOW: Continue monitoring for more agent completions.\n`
+      )
+    );
+    console.log(
+      chalk.blue(
+        `\n📋 Next step: Run ${chalk.bold(`csa wait ${found.sessionId}`)} to check for more agent completions.\n`
+      )
+    );
+    if (pendingAgents.length > 0) {
+      console.log(
+        chalk.gray(
+          `  (${pendingAgents.length} agent(s) already pending verification)\n`
+        )
+      );
+    }
+    if (runningAgents.length > 0) {
+      console.log(
+        chalk.gray(
+          `  (${runningAgents.length} agent(s) still running)\n`
+        )
+      );
+    }
   }
 }

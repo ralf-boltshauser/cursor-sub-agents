@@ -115,9 +115,52 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
 
   console.log(
     chalk.yellow(
-      `\n⏳ Now wait for sub-jobs to report with: ${chalk.bold(
+      `\n🤖 AUTOMATED WORKFLOW: You must now automatically monitor and approve all agents.\n`
+    )
+  );
+  console.log(
+    chalk.blue(
+      `\n📋 Next steps (execute these automatically, in a loop until all agents are approved):\n`
+    )
+  );
+  console.log(
+    chalk.gray(
+      `  1. Run: ${chalk.bold(
         `csa wait ${sessionId}`
-      )}\nYou have to execute this command!\n`
+      )} - This will notify you when an agent completes\n`
+    )
+  );
+  console.log(
+    chalk.gray(
+      `  2. Review the completed agent's work (check files, test, verify changes)\n`
+    )
+  );
+  console.log(
+    chalk.gray(
+      `  3. If work is good: Run ${chalk.bold(
+        `csa accept <agentId>`
+      )} to approve\n`
+    )
+  );
+  console.log(
+    chalk.gray(
+      `     If changes needed: Run ${chalk.bold(
+        `csa feedback <agentId> "your feedback"`
+      )} to request changes\n`
+    )
+  );
+  console.log(
+    chalk.gray(
+      `  4. Go back to step 1 (run ${chalk.bold(
+        `csa wait ${sessionId}`
+      )} again) until all agents are approved\n`
+    )
+  );
+  console.log(
+    chalk.yellow(
+      `\n🚀 START NOW: Execute ${chalk.bold(
+        `csa wait ${sessionId}`
+      )} to begin monitoring.\n`
     )
   );
 
