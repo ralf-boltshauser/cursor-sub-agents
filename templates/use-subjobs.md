@@ -11,6 +11,48 @@ Each job file should contain:
 - **Tasks**: One or more tasks that the sub-agent should complete
 - Each task should be independent and self-contained
 
+## Valid Job.json Example
+
+Here's an example of a valid `job.json` file with all required fields:
+
+```json
+{
+  "id": "fix-issue-1",
+  "goal": "Fix the authentication bug in the login component",
+  "tasks": [
+    {
+      "name": "Research the issue",
+      "type": "research",
+      "files": [
+        "src/components/Login.tsx",
+        "src/utils/auth.ts"
+      ],
+      "prompt": "Analyze the authentication flow and identify why users are getting logged out unexpectedly"
+    },
+    {
+      "name": "Implement the fix",
+      "type": "implement",
+      "files": [
+        "src/components/Login.tsx",
+        "src/utils/auth.ts"
+      ],
+      "prompt": "Fix the token refresh logic to prevent unexpected logouts"
+    }
+  ]
+}
+```
+
+**Required fields:**
+- `id` (string): Must match the job directory name (e.g., if file is at `.csa/jobs/fix-issue-1/job.json`, `id` must be `"fix-issue-1"`)
+- `goal` (string): The main objective for this sub-agent
+- `tasks` (array): At least one task object
+
+**Each task must have:**
+- `name` (string): Descriptive name for the task
+- `type` (string): Task type (e.g., "research", "implement", "fix-issue") - use `csa task-types list` to see available types
+- `files` (array): Array of file paths (can be empty `[]`)
+- `prompt` (string): Detailed instruction for what the agent should do
+
 ## Spawn Agents with Jobs
 
 You then spawn sub-agents via:

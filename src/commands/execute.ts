@@ -3,10 +3,12 @@ import {
   getJobLocation,
   getTaskTypeCommands,
   loadJob,
+  loadJobFileRaw,
   loadTaskTypes,
   scheduleSelfPrompt,
   sleep,
   validateCommandsExist,
+  validateJobStructure,
 } from "../utils.js";
 
 interface TaskValidationError {
@@ -19,15 +21,50 @@ export async function scheduleJob(jobId: string): Promise<void> {
   try {
     console.log(chalk.blue(`\n📅 Scheduling job: ${chalk.bold(jobId)}\n`));
 
-    // Load job and show location
-    const location = await getJobLocation(jobId);
-    const job = await loadJob(jobId);
-    const locationText = location === "local" ? chalk.cyan("local") : chalk.yellow("global");
-    console.log(chalk.gray(`Source: ${locationText}`));
-    console.log(chalk.gray(`Goal: ${job.goal}`));
-    console.log(chalk.gray(`Tasks: ${job.tasks.length}\n`));
+    // Load and validate job structure before loading
+    let job: any;
+    let jobFile: string;
+    try {
+      const result = await loadJobFileRaw(jobId);
+      job = result.job;
+      jobFile = result.jobFile;
+    } catch (error) {
+      console.error(
+        chalk.red(
+          `❌ Failed to load job: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      );
+      process.exit(1);
+    }
 
-    if (job.tasks.length === 0) {
+    // Validate job structure
+    const structureErrors = validateJobStructure(job, jobId);
+    if (structureErrors.length > 0) {
+      console.error(chalk.red("❌ Job structure validation failed:\n"));
+      for (const error of structureErrors) {
+        console.error(chalk.red(`  • ${error}`));
+      }
+      console.error(chalk.gray(`\n  File: ${jobFile}`));
+      console.error(
+        chalk.gray(
+          `  Run 'csa validate-job ${jobId}' for detailed validation\n`
+        )
+      );
+      process.exit(1);
+    }
+
+    // Load job and show location (now that structure is validated)
+    const location = await getJobLocation(jobId);
+    const validatedJob = await loadJob(jobId);
+    const locationText =
+      location === "local" ? chalk.cyan("local") : chalk.yellow("global");
+    console.log(chalk.gray(`Source: ${locationText}`));
+    console.log(chalk.gray(`Goal: ${validatedJob.goal}`));
+    console.log(chalk.gray(`Tasks: ${validatedJob.tasks.length}\n`));
+
+    if (validatedJob.tasks.length === 0) {
       console.error(chalk.red("Error: Job has no tasks"));
       process.exit(1);
     }
@@ -37,7 +74,7 @@ export async function scheduleJob(jobId: string): Promise<void> {
     const errors: TaskValidationError[] = [];
     const allTaskTypes = await loadTaskTypes();
 
-    for (const [taskIndex, task] of job.tasks.entries()) {
+    for (const [taskIndex, task] of validatedJob.tasks.entries()) {
       // Validate task structure
       if (!task.name) {
         errors.push({
@@ -146,12 +183,12 @@ export async function scheduleJob(jobId: string): Promise<void> {
     console.log(chalk.green("✅ All tasks validated successfully!\n"));
 
     // Process each task sequentially
-    for (const [taskIndex, task] of job.tasks.entries()) {
+    for (const [taskIndex, task] of validatedJob.tasks.entries()) {
       console.log(
         chalk.yellow(
-          `\n📋 Task ${taskIndex + 1}/${job.tasks.length}: ${chalk.bold(
-            task.name
-          )}`
+          `\n📋 Task ${taskIndex + 1}/${
+            validatedJob.tasks.length
+          }: ${chalk.bold(task.name)}`
         )
       );
       console.log(chalk.gray(`   Type: ${task.type}`));
@@ -220,7 +257,7 @@ export async function scheduleJob(jobId: string): Promise<void> {
       console.log(chalk.green(`   ✅ Completed ${commands.length} command(s)`));
 
       // Wait between tasks (except after the last one)
-      if (taskIndex < job.tasks.length - 1) {
+      if (taskIndex < validatedJob.tasks.length - 1) {
         console.log(chalk.gray("   ⏳ Waiting before next task..."));
         await sleep(1000);
       }

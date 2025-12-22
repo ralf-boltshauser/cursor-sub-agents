@@ -790,8 +790,8 @@ export async function validateCommandsExist(
 }
 
 // Job Utilities
-const GLOBAL_JOBS_DIR = path.join(STATE_DIR, "jobs");
-const PROJECT_JOBS_DIR = path.join(process.cwd(), ".csa", "jobs");
+export const GLOBAL_JOBS_DIR = path.join(STATE_DIR, "jobs");
+export const PROJECT_JOBS_DIR = path.join(process.cwd(), ".csa", "jobs");
 
 // Ensure global jobs directory exists
 export async function ensureGlobalJobsDir(): Promise<void> {
@@ -812,7 +812,10 @@ export async function ensureProjectJobsDir(): Promise<void> {
   }
 }
 
-export async function ensureJobDir(jobId: string, isGlobal: boolean = false): Promise<string> {
+export async function ensureJobDir(
+  jobId: string,
+  isGlobal: boolean = false
+): Promise<string> {
   const jobsDir = isGlobal ? GLOBAL_JOBS_DIR : PROJECT_JOBS_DIR;
   if (isGlobal) {
     await ensureGlobalJobsDir();
@@ -829,7 +832,9 @@ export async function ensureJobDir(jobId: string, isGlobal: boolean = false): Pr
 }
 
 // Get job location: "local" | "global" | null
-export async function getJobLocation(jobId: string): Promise<"local" | "global" | null> {
+export async function getJobLocation(
+  jobId: string
+): Promise<"local" | "global" | null> {
   const localJobFile = path.join(PROJECT_JOBS_DIR, jobId, "job.json");
   const globalJobFile = path.join(GLOBAL_JOBS_DIR, jobId, "job.json");
 
@@ -846,33 +851,114 @@ export async function getJobLocation(jobId: string): Promise<"local" | "global" 
   }
 }
 
-// Load job: try local first, then global
-export async function loadJob(jobId: string): Promise<Job> {
-  // Try local first
+// Load job file raw (reads and parses JSON, doesn't validate structure)
+// Returns { job, jobFile } or throws with descriptive error
+export async function loadJobFileRaw(
+  jobId: string
+): Promise<{ job: any; jobFile: string }> {
   const localJobFile = path.join(PROJECT_JOBS_DIR, jobId, "job.json");
+  const globalJobFile = path.join(GLOBAL_JOBS_DIR, jobId, "job.json");
+
+  // Try local first
   try {
     const content = await fs.readFile(localJobFile, "utf-8");
-    const job = JSON.parse(content) as Job;
-    if (job && job.id && job.goal && Array.isArray(job.tasks)) {
-      return job;
-    }
-    throw new Error("Invalid job.json structure");
+    const job = JSON.parse(content);
+    return { job, jobFile: localJobFile };
   } catch (localError) {
     // Try global
-    const globalJobFile = path.join(GLOBAL_JOBS_DIR, jobId, "job.json");
     try {
       const content = await fs.readFile(globalJobFile, "utf-8");
-      const job = JSON.parse(content) as Job;
-      if (job && job.id && job.goal && Array.isArray(job.tasks)) {
-        return job;
-      }
-      throw new Error("Invalid job.json structure");
+      const job = JSON.parse(content);
+      return { job, jobFile: globalJobFile };
     } catch (globalError) {
       throw new Error(
         `Failed to load job ${jobId}: Job not found in local (${PROJECT_JOBS_DIR}) or global (${GLOBAL_JOBS_DIR}) locations`
       );
     }
   }
+}
+
+// Structure for job validation errors
+export interface JobValidationError {
+  errors: string[];
+  jobId: string;
+  jobFile: string;
+}
+
+// Validate job structure and return specific error messages
+export function validateJobStructure(job: any, jobId: string): string[] {
+  const errors: string[] = [];
+
+  if (!job) {
+    errors.push("Job is null or undefined");
+    return errors;
+  }
+
+  if (!job.id) {
+    errors.push("Job missing 'id' field");
+  } else if (typeof job.id !== "string") {
+    errors.push("Job 'id' field must be a string");
+  } else if (job.id !== jobId) {
+    // This is a warning-level issue, but we'll include it in errors for consistency
+    errors.push(
+      `Job ID mismatch: job.json has '${job.id}' but expected '${jobId}'`
+    );
+  }
+
+  if (!job.goal) {
+    errors.push("Job missing 'goal' field");
+  } else if (typeof job.goal !== "string") {
+    errors.push("Job 'goal' field must be a string");
+  }
+
+  if (!job.tasks) {
+    errors.push("Job missing 'tasks' field");
+  } else if (!Array.isArray(job.tasks)) {
+    errors.push("Job 'tasks' must be an array");
+  } else if (job.tasks.length === 0) {
+    errors.push("Job has no tasks");
+  }
+
+  return errors;
+}
+
+// Load and validate job: combines file loading, structure validation
+// Returns validated Job or throws JobValidationError
+export async function loadAndValidateJob(jobId: string): Promise<Job> {
+  const { job, jobFile } = await loadJobFileRaw(jobId);
+  const errors = validateJobStructure(job, jobId);
+
+  if (errors.length > 0) {
+    const validationError = new Error(
+      `Job validation failed: ${errors.join("; ")}`
+    ) as Error & { validationError: JobValidationError };
+    validationError.validationError = {
+      errors,
+      jobId,
+      jobFile,
+    };
+    throw validationError;
+  }
+
+  // Type assertion is safe here because validateJobStructure ensures structure
+  return job as Job;
+}
+
+// Load job: try local first, then global
+// Uses validateJobStructure() internally for consistent validation
+// Maintains backward compatibility - throws generic error if validation fails
+export async function loadJob(jobId: string): Promise<Job> {
+  const { job, jobFile } = await loadJobFileRaw(jobId);
+  const errors = validateJobStructure(job, jobId);
+
+  if (errors.length > 0) {
+    // For backward compatibility, throw generic error
+    // Commands that need specific errors should use loadAndValidateJob()
+    throw new Error("Invalid job.json structure");
+  }
+
+  // Type assertion is safe here because validateJobStructure ensures structure
+  return job as Job;
 }
 
 // List all global job IDs

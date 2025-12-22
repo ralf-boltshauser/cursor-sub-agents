@@ -20,6 +20,14 @@ import {
 } from "./commands/config.js";
 import { scheduleJob } from "./commands/execute.js";
 import { feedbackAgent } from "./commands/feedback.js";
+import {
+  addJob,
+  copyJob,
+  interactiveJobs,
+  listJobs,
+  removeJob,
+  showJob,
+} from "./commands/jobs.js";
 import { spawnAgentsWithJobs } from "./commands/spawn-jobs.js";
 import { spawnAgents } from "./commands/spawn.js";
 import { listStatus } from "./commands/status.js";
@@ -34,21 +42,13 @@ import {
 } from "./commands/task-types.js";
 import { validateJob } from "./commands/validate-job.js";
 import { waitForAgents } from "./commands/wait.js";
-import {
-  addJob,
-  copyJob,
-  interactiveJobs,
-  listJobs,
-  removeJob,
-  showJob,
-} from "./commands/jobs.js";
 
 const program = new Command();
 
 program
   .name("cursor-sub-agents")
   .description("Manage multiple Cursor sub-agents in parallel")
-  .version("1.8.0");
+  .version("1.9.0");
 
 program
   .command("spawn")

@@ -1,53 +1,52 @@
 import chalk from "chalk";
 import {
-  loadJob,
   getTaskTypeCommands,
-  validateCommandsExist,
+  loadJobFileRaw,
   loadTaskTypes,
+  validateCommandsExist,
+  validateJobStructure,
 } from "../utils.js";
 
 export async function validateJob(jobId: string): Promise<void> {
   try {
     console.log(chalk.blue(`\n🔍 Validating job: ${chalk.bold(jobId)}\n`));
 
-    // Load the job
-    let job;
+    // Load job file using utility function
+    let job: any;
+    let jobFile: string;
     try {
-      job = await loadJob(jobId);
+      const result = await loadJobFileRaw(jobId);
+      job = result.job;
+      jobFile = result.jobFile;
     } catch (error) {
       console.error(
         chalk.red(
-          `❌ Failed to load job: ${error instanceof Error ? error.message : String(error)}`
+          `❌ Failed to load job: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         )
       );
       process.exit(1);
     }
 
-    // Validate basic structure
+    // Validate basic structure using the new validation function
     console.log(chalk.gray("Validating job structure..."));
-    if (!job.id) {
-      console.error(chalk.red("  ❌ Job missing 'id' field"));
-      process.exit(1);
-    }
-    if (job.id !== jobId) {
-      console.warn(
-        chalk.yellow(
-          `  ⚠️  Job ID mismatch: job.json has '${job.id}' but expected '${jobId}'`
+    const structureErrors = validateJobStructure(job, jobId);
+
+    if (structureErrors.length > 0) {
+      console.error(chalk.red("  ❌ Job structure validation failed:\n"));
+      for (const error of structureErrors) {
+        console.error(chalk.red(`    • ${error}`));
+      }
+      console.error(chalk.gray(`\n  File: ${jobFile}`));
+      console.error(
+        chalk.gray(
+          `\n  Run 'csa validate-job ${jobId}' after fixing the structure errors above.`
         )
       );
-    }
-    if (!job.goal) {
-      console.error(chalk.red("  ❌ Job missing 'goal' field"));
       process.exit(1);
     }
-    if (!Array.isArray(job.tasks)) {
-      console.error(chalk.red("  ❌ Job 'tasks' must be an array"));
-      process.exit(1);
-    }
-    if (job.tasks.length === 0) {
-      console.error(chalk.red("  ❌ Job has no tasks"));
-      process.exit(1);
-    }
+
     console.log(chalk.green(`  ✅ Job structure valid`));
     console.log(chalk.gray(`  Goal: ${job.goal}`));
     console.log(chalk.gray(`  Tasks: ${job.tasks.length}\n`));
@@ -59,7 +58,9 @@ export async function validateJob(jobId: string): Promise<void> {
     for (const [taskIndex, task] of job.tasks.entries()) {
       console.log(
         chalk.gray(
-          `Validating task ${taskIndex + 1}/${job.tasks.length}: ${chalk.bold(task.name || "unnamed")}`
+          `Validating task ${taskIndex + 1}/${job.tasks.length}: ${chalk.bold(
+            task.name || "unnamed"
+          )}`
         )
       );
 
@@ -89,7 +90,11 @@ export async function validateJob(jobId: string): Promise<void> {
       if (!(task.type in allTaskTypes)) {
         console.error(
           chalk.red(
-            `  ❌ Task type "${task.type}" not found. Available types: ${Object.keys(allTaskTypes).join(", ")}`
+            `  ❌ Task type "${
+              task.type
+            }" not found. Available types: ${Object.keys(allTaskTypes).join(
+              ", "
+            )}`
           )
         );
         console.error(
@@ -105,9 +110,7 @@ export async function validateJob(jobId: string): Promise<void> {
       const commands = await getTaskTypeCommands(task.type);
       if (commands.length === 0) {
         console.warn(
-          chalk.yellow(
-            `  ⚠️  Task type "${task.type}" has no commands defined`
-          )
+          chalk.yellow(`  ⚠️  Task type "${task.type}" has no commands defined`)
         );
       } else {
         // Validate commands exist
@@ -115,7 +118,9 @@ export async function validateJob(jobId: string): Promise<void> {
         if (missing.length > 0) {
           console.error(
             chalk.red(
-              `  ❌ Missing commands: ${missing.map((c) => chalk.bold(c)).join(", ")}`
+              `  ❌ Missing commands: ${missing
+                .map((c) => chalk.bold(c))
+                .join(", ")}`
             )
           );
           console.error(
@@ -127,7 +132,9 @@ export async function validateJob(jobId: string): Promise<void> {
         } else {
           console.log(
             chalk.green(
-              `  ✅ Task type "${task.type}" valid (${commands.length} command(s): ${commands.join(", ")})`
+              `  ✅ Task type "${task.type}" valid (${
+                commands.length
+              } command(s): ${commands.join(", ")})`
             )
           );
         }
@@ -173,4 +180,3 @@ export async function validateJob(jobId: string): Promise<void> {
     process.exit(1);
   }
 }
-

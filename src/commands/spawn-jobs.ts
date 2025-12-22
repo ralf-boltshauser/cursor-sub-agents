@@ -6,10 +6,12 @@ import {
   generateSessionId,
   getJobLocation,
   loadJob,
+  loadJobFileRaw,
   loadState,
   saveState,
   sleep,
   spawnAgentWithJob,
+  validateJobStructure,
 } from "../utils.js";
 
 export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
@@ -34,27 +36,66 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
   for (const jobId of jobIds) {
     try {
       const location = await getJobLocation(jobId);
-      const job = await loadJob(jobId);
+
+      // Load and validate job structure before loading
+      let job: any;
+      let jobFile: string;
+      try {
+        const result = await loadJobFileRaw(jobId);
+        job = result.job;
+        jobFile = result.jobFile;
+      } catch (error) {
+        console.error(
+          chalk.red(
+            `  ❌ Failed to load job ${jobId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+        );
+        continue;
+      }
+
+      // Validate job structure
+      const structureErrors = validateJobStructure(job, jobId);
+      if (structureErrors.length > 0) {
+        console.error(chalk.red(`  ❌ Job ${jobId} validation failed:\n`));
+        for (const error of structureErrors) {
+          console.error(chalk.red(`    • ${error}`));
+        }
+        console.error(chalk.gray(`    File: ${jobFile}`));
+        console.error(
+          chalk.gray(
+            `    Run 'csa validate-job ${jobId}' for detailed validation\n`
+          )
+        );
+        continue;
+      }
+
+      // Load the validated job (this will work now since structure is valid)
+      const validatedJob = await loadJob(jobId);
       const agentId = generateAgentId();
       const agent: AgentState = {
         id: agentId,
-        prompt: job.goal, // Use job goal as prompt
+        prompt: validatedJob.goal, // Use job goal as prompt
         status: "running",
         startedAt,
         repository,
       };
       agents.push(agent);
 
-      const locationText = location === "local" ? chalk.cyan("local") : chalk.yellow("global");
+      const locationText =
+        location === "local" ? chalk.cyan("local") : chalk.yellow("global");
       console.log(
         chalk.gray(
           `  • Agent ${chalk.bold(agentId)} (${chalk.bold(
             jobId
-          )}): ${job.goal.substring(0, 60)}${job.goal.length > 60 ? "..." : ""}`
+          )}): ${validatedJob.goal.substring(0, 60)}${
+            validatedJob.goal.length > 60 ? "..." : ""
+          }`
         )
       );
       console.log(chalk.gray(`     Source: ${locationText}`));
-      console.log(chalk.gray(`     Tasks: ${job.tasks.length}`));
+      console.log(chalk.gray(`     Tasks: ${validatedJob.tasks.length}`));
     } catch (error) {
       console.error(
         chalk.red(
