@@ -666,6 +666,78 @@ export async function getTaskTypeCommands(taskType: string): Promise<string[]> {
 const GLOBAL_COMMANDS_DIR = path.join(os.homedir(), ".cursor", "commands");
 const PROJECT_COMMANDS_DIR = path.join(process.cwd(), ".cursor", "commands");
 
+// Get all available commands with their preview (first line)
+export async function getAllAvailableCommands(): Promise<
+  Array<{ name: string; preview: string; location: "global" | "project" }>
+> {
+  const commands: Array<{
+    name: string;
+    preview: string;
+    location: "global" | "project";
+  }> = [];
+
+  // Get global commands
+  try {
+    const globalFiles = await fs.readdir(GLOBAL_COMMANDS_DIR);
+    for (const file of globalFiles) {
+      if (file.endsWith(".md")) {
+        const commandName = file.replace(".md", "");
+        const filePath = path.join(GLOBAL_COMMANDS_DIR, file);
+        try {
+          const content = await fs.readFile(filePath, "utf-8");
+          const firstLine = content.split("\n")[0] || "";
+          // Remove # if it's a markdown header
+          const preview = firstLine.replace(/^#+\s*/, "").trim() || commandName;
+          commands.push({ name: commandName, preview, location: "global" });
+        } catch {
+          // If we can't read the file, just add the name
+          commands.push({
+            name: commandName,
+            preview: commandName,
+            location: "global",
+          });
+        }
+      }
+    }
+  } catch {
+    // Global directory doesn't exist, that's fine
+  }
+
+  // Get project commands (avoid duplicates)
+  try {
+    const projectFiles = await fs.readdir(PROJECT_COMMANDS_DIR);
+    for (const file of projectFiles) {
+      if (file.endsWith(".md")) {
+        const commandName = file.replace(".md", "");
+        // Skip if already in global
+        if (commands.some((c) => c.name === commandName)) {
+          continue;
+        }
+        const filePath = path.join(PROJECT_COMMANDS_DIR, file);
+        try {
+          const content = await fs.readFile(filePath, "utf-8");
+          const firstLine = content.split("\n")[0] || "";
+          const preview = firstLine.replace(/^#+\s*/, "").trim() || commandName;
+          commands.push({ name: commandName, preview, location: "project" });
+        } catch {
+          commands.push({
+            name: commandName,
+            preview: commandName,
+            location: "project",
+          });
+        }
+      }
+    }
+  } catch {
+    // Project directory doesn't exist, that's fine
+  }
+
+  // Sort by name
+  commands.sort((a, b) => a.name.localeCompare(b.name));
+
+  return commands;
+}
+
 async function commandExists(command: string): Promise<boolean> {
   const globalCommandFile = path.join(GLOBAL_COMMANDS_DIR, `${command}.md`);
   const projectCommandFile = path.join(PROJECT_COMMANDS_DIR, `${command}.md`);
@@ -718,10 +790,36 @@ export async function validateCommandsExist(
 }
 
 // Job Utilities
-const JOBS_DIR = path.join(process.cwd(), ".csa", "jobs");
+const GLOBAL_JOBS_DIR = path.join(STATE_DIR, "jobs");
+const PROJECT_JOBS_DIR = path.join(process.cwd(), ".csa", "jobs");
 
-export async function ensureJobDir(jobId: string): Promise<string> {
-  const jobDir = path.join(JOBS_DIR, jobId);
+// Ensure global jobs directory exists
+export async function ensureGlobalJobsDir(): Promise<void> {
+  try {
+    await ensureStateDir();
+    await fs.mkdir(GLOBAL_JOBS_DIR, { recursive: true });
+  } catch {
+    // Directory might already exist, ignore
+  }
+}
+
+// Ensure project jobs directory exists
+export async function ensureProjectJobsDir(): Promise<void> {
+  try {
+    await fs.mkdir(PROJECT_JOBS_DIR, { recursive: true });
+  } catch {
+    // Directory might already exist, ignore
+  }
+}
+
+export async function ensureJobDir(jobId: string, isGlobal: boolean = false): Promise<string> {
+  const jobsDir = isGlobal ? GLOBAL_JOBS_DIR : PROJECT_JOBS_DIR;
+  if (isGlobal) {
+    await ensureGlobalJobsDir();
+  } else {
+    await ensureProjectJobsDir();
+  }
+  const jobDir = path.join(jobsDir, jobId);
   try {
     await fs.mkdir(jobDir, { recursive: true });
   } catch {
@@ -730,29 +828,142 @@ export async function ensureJobDir(jobId: string): Promise<string> {
   return jobDir;
 }
 
-export async function loadJob(jobId: string): Promise<Job> {
-  const jobFile = path.join(JOBS_DIR, jobId, "job.json");
+// Get job location: "local" | "global" | null
+export async function getJobLocation(jobId: string): Promise<"local" | "global" | null> {
+  const localJobFile = path.join(PROJECT_JOBS_DIR, jobId, "job.json");
+  const globalJobFile = path.join(GLOBAL_JOBS_DIR, jobId, "job.json");
+
   try {
-    const content = await fs.readFile(jobFile, "utf-8");
+    await fs.access(localJobFile);
+    return "local";
+  } catch {
+    try {
+      await fs.access(globalJobFile);
+      return "global";
+    } catch {
+      return null;
+    }
+  }
+}
+
+// Load job: try local first, then global
+export async function loadJob(jobId: string): Promise<Job> {
+  // Try local first
+  const localJobFile = path.join(PROJECT_JOBS_DIR, jobId, "job.json");
+  try {
+    const content = await fs.readFile(localJobFile, "utf-8");
     const job = JSON.parse(content) as Job;
     if (job && job.id && job.goal && Array.isArray(job.tasks)) {
       return job;
     }
     throw new Error("Invalid job.json structure");
-  } catch (error) {
-    throw new Error(
-      `Failed to load job ${jobId}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+  } catch (localError) {
+    // Try global
+    const globalJobFile = path.join(GLOBAL_JOBS_DIR, jobId, "job.json");
+    try {
+      const content = await fs.readFile(globalJobFile, "utf-8");
+      const job = JSON.parse(content) as Job;
+      if (job && job.id && job.goal && Array.isArray(job.tasks)) {
+        return job;
+      }
+      throw new Error("Invalid job.json structure");
+    } catch (globalError) {
+      throw new Error(
+        `Failed to load job ${jobId}: Job not found in local (${PROJECT_JOBS_DIR}) or global (${GLOBAL_JOBS_DIR}) locations`
+      );
+    }
   }
 }
 
-export async function saveJob(jobId: string, job: Job): Promise<void> {
-  await ensureJobDir(jobId);
-  const jobFile = path.join(JOBS_DIR, jobId, "job.json");
+// List all global job IDs
+export async function listGlobalJobs(): Promise<string[]> {
+  await ensureGlobalJobsDir();
+  try {
+    const entries = await fs.readdir(GLOBAL_JOBS_DIR, { withFileTypes: true });
+    const jobIds: string[] = [];
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const jobFile = path.join(GLOBAL_JOBS_DIR, entry.name, "job.json");
+        try {
+          await fs.access(jobFile);
+          jobIds.push(entry.name);
+        } catch {
+          // Directory exists but no job.json, skip
+        }
+      }
+    }
+    return jobIds.sort();
+  } catch {
+    return [];
+  }
+}
+
+// List all project job IDs
+export async function listProjectJobs(): Promise<string[]> {
+  await ensureProjectJobsDir();
+  try {
+    const entries = await fs.readdir(PROJECT_JOBS_DIR, { withFileTypes: true });
+    const jobIds: string[] = [];
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const jobFile = path.join(PROJECT_JOBS_DIR, entry.name, "job.json");
+        try {
+          await fs.access(jobFile);
+          jobIds.push(entry.name);
+        } catch {
+          // Directory exists but no job.json, skip
+        }
+      }
+    }
+    return jobIds.sort();
+  } catch {
+    return [];
+  }
+}
+
+// List all jobs with their locations
+export async function listAllJobs(): Promise<
+  Array<{ jobId: string; location: "local" | "global" }>
+> {
+  const globalJobs = await listGlobalJobs();
+  const projectJobs = await listProjectJobs();
+
+  const allJobs: Array<{ jobId: string; location: "local" | "global" }> = [];
+
+  // Add project jobs (these override global)
+  for (const jobId of projectJobs) {
+    allJobs.push({ jobId, location: "local" });
+  }
+
+  // Add global jobs that aren't overridden
+  for (const jobId of globalJobs) {
+    if (!projectJobs.includes(jobId)) {
+      allJobs.push({ jobId, location: "global" });
+    }
+  }
+
+  return allJobs.sort((a, b) => a.jobId.localeCompare(b.jobId));
+}
+
+// Save job to global location
+export async function saveGlobalJob(jobId: string, job: Job): Promise<void> {
+  await ensureJobDir(jobId, true);
+  const jobFile = path.join(GLOBAL_JOBS_DIR, jobId, "job.json");
   const content = JSON.stringify(job, null, 2);
   await fs.writeFile(jobFile, content, "utf-8");
+}
+
+// Save job to project location
+export async function saveProjectJob(jobId: string, job: Job): Promise<void> {
+  await ensureJobDir(jobId, false);
+  const jobFile = path.join(PROJECT_JOBS_DIR, jobId, "job.json");
+  const content = JSON.stringify(job, null, 2);
+  await fs.writeFile(jobFile, content, "utf-8");
+}
+
+// Save job (backward compatibility - saves to project by default)
+export async function saveJob(jobId: string, job: Job): Promise<void> {
+  await saveProjectJob(jobId, job);
 }
 
 // Sleep utility that actually waits
@@ -852,8 +1063,10 @@ export async function scheduleSelfPrompt(
     );
   }
 
-  // Wait after first Enter
-  await sleep(1000);
+  // Wait after first Enter - longer for long texts to ensure everything is processed
+  const textLength = text.length;
+  const waitTime = textLength > 200 ? 3000 : textLength > 100 ? 2000 : 1000;
+  await sleep(waitTime);
 
   // Second Enter (only for commands, to submit)
   if (isCommand) {
@@ -888,8 +1101,9 @@ export async function spawnAgentWithJob(
   // Load the job
   const job = await loadJob(jobId);
 
-  // Use job goal as the initial prompt
-  const encodedPrompt = urlEncode(job.goal);
+  // Use job goal as the initial prompt, with clarification message
+  const goalWithClarification = `${job.goal}\n\nThis is just the goal, don't start working yet - this is only for your understanding.`;
+  const encodedPrompt = urlEncode(goalWithClarification);
   const url = `https://cursor.com/link/prompt?text=${encodedPrompt}`;
 
   // Open URL in new Cursor window
@@ -939,7 +1153,8 @@ export async function spawnAgentWithJob(
     );
   }
 
-  await sleep(2000);
+  // Wait longer for goal submission (long text)
+  await sleep(3000);
 
   // Second Enter to submit
   const enter2Script = `tell application "System Events" to keystroke return`;
@@ -959,7 +1174,17 @@ export async function spawnAgentWithJob(
     );
   }
 
-  await sleep(2000);
+  // Wait longer after goal submission (long text)
+  await sleep(3000);
+
+  // Send job overview message before starting tasks
+  const taskNames = job.tasks.map((t, i) => `${i + 1}. ${t.name}`).join("\n");
+  const overviewPrompt = `This job consists of ${job.tasks.length} task(s) that you will tackle step by step:\n\n${taskNames}\n\nPlease acknowledge by saying "okay" or "understood" when you're ready to begin.\n\nThis is your general task. Don't start working yet - wait for me to send you the specific tasks one by one.`;
+
+  await scheduleSelfPrompt(overviewPrompt, false);
+  // Wait based on number of tasks to ensure the list is fully processed (1 second per task)
+  const taskListDelay = job.tasks.length * 1000;
+  await sleep(Math.max(3000, taskListDelay)); // At least 3 seconds, or 1 second per task
 
   // Validate all tasks upfront before starting execution
   const allTaskTypes = await loadTaskTypes();
@@ -1066,7 +1291,7 @@ export async function spawnAgentWithJob(
       task.files.length === 1
         ? `You are expected to read ${task.files[0]}.`
         : `You are expected to read the following files:\n${filesList}`;
-    const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.`;
+    const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.\n\nDon't start working yet - wait for me to send you the commands.`;
 
     // Schedule kickoff prompt (waits for completion)
     await scheduleSelfPrompt(kickoffPrompt, false);
@@ -1097,5 +1322,9 @@ export async function spawnAgentWithJob(
   // Append final prompt to tell agent to complete their work
   const completePrompt = `\n\nExecute this command to hand in your work: csa complete ${agentId}`;
   await scheduleSelfPrompt(completePrompt, false);
+  await sleep(1000);
+
+  const summaryPrompt = `\n\nSummarize what you have learned, and what you have done. Short and concise.`;
+  await scheduleSelfPrompt(summaryPrompt, false);
   await sleep(1000);
 }

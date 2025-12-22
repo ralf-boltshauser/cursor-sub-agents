@@ -4,6 +4,7 @@ import {
   cleanupOldSessions,
   generateAgentId,
   generateSessionId,
+  getJobLocation,
   loadJob,
   loadState,
   saveState,
@@ -32,6 +33,7 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
   // Create agents from jobs
   for (const jobId of jobIds) {
     try {
+      const location = await getJobLocation(jobId);
       const job = await loadJob(jobId);
       const agentId = generateAgentId();
       const agent: AgentState = {
@@ -43,6 +45,7 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
       };
       agents.push(agent);
 
+      const locationText = location === "local" ? chalk.cyan("local") : chalk.yellow("global");
       console.log(
         chalk.gray(
           `  • Agent ${chalk.bold(agentId)} (${chalk.bold(
@@ -50,6 +53,7 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
           )}): ${job.goal.substring(0, 60)}${job.goal.length > 60 ? "..." : ""}`
         )
       );
+      console.log(chalk.gray(`     Source: ${locationText}`));
       console.log(chalk.gray(`     Tasks: ${job.tasks.length}`));
     } catch (error) {
       console.error(

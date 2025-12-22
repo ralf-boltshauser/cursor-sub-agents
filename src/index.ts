@@ -34,13 +34,21 @@ import {
 } from "./commands/task-types.js";
 import { validateJob } from "./commands/validate-job.js";
 import { waitForAgents } from "./commands/wait.js";
+import {
+  addJob,
+  copyJob,
+  interactiveJobs,
+  listJobs,
+  removeJob,
+  showJob,
+} from "./commands/jobs.js";
 
 const program = new Command();
 
 program
   .name("cursor-sub-agents")
   .description("Manage multiple Cursor sub-agents in parallel")
-  .version("1.5.2");
+  .version("1.8.0");
 
 program
   .command("spawn")
@@ -212,6 +220,58 @@ taskTypesCommand
 // Default action: interactive mode
 taskTypesCommand.action(async () => {
   await interactiveTaskTypes();
+});
+
+// Jobs Management
+const jobsCommand = program
+  .command("jobs")
+  .description("Manage jobs (interactive mode if no subcommand)");
+
+jobsCommand
+  .command("list")
+  .description("List all jobs (global + project)")
+  .action(async () => {
+    await listJobs();
+  });
+
+jobsCommand
+  .command("show")
+  .description("Show details of a specific job")
+  .argument("<jobId>", "Job ID")
+  .action(async (jobId: string) => {
+    await showJob(jobId);
+  });
+
+jobsCommand
+  .command("add")
+  .description("Add a new job")
+  .argument("<jobId>", "Job ID")
+  .option("-g, --global", "Add to global config instead of project")
+  .action(async (jobId: string, options?: { global?: boolean }) => {
+    await addJob(jobId, options?.global || false);
+  });
+
+jobsCommand
+  .command("remove")
+  .description("Remove a job")
+  .argument("<jobId>", "Job ID")
+  .option("-g, --global", "Remove from global config instead of project")
+  .action(async (jobId: string, options?: { global?: boolean }) => {
+    await removeJob(jobId, options?.global || false);
+  });
+
+jobsCommand
+  .command("copy")
+  .description("Copy a job to another location")
+  .argument("<jobId>", "Job ID")
+  .option("-g, --global", "Copy to global (default: copy to project)")
+  .action(async (jobId: string, options?: { global?: boolean }) => {
+    await copyJob(jobId, options?.global || false);
+  });
+
+// Default action: interactive mode
+jobsCommand.action(async () => {
+  await interactiveJobs();
 });
 
 // Config commands

@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import {
+  getJobLocation,
   getTaskTypeCommands,
   loadJob,
   loadTaskTypes,
@@ -18,8 +19,11 @@ export async function scheduleJob(jobId: string): Promise<void> {
   try {
     console.log(chalk.blue(`\n📅 Scheduling job: ${chalk.bold(jobId)}\n`));
 
-    // Load job
+    // Load job and show location
+    const location = await getJobLocation(jobId);
     const job = await loadJob(jobId);
+    const locationText = location === "local" ? chalk.cyan("local") : chalk.yellow("global");
+    console.log(chalk.gray(`Source: ${locationText}`));
     console.log(chalk.gray(`Goal: ${job.goal}`));
     console.log(chalk.gray(`Tasks: ${job.tasks.length}\n`));
 
@@ -192,7 +196,7 @@ export async function scheduleJob(jobId: string): Promise<void> {
         task.files.length === 1
           ? `You are expected to read ${task.files[0]}.`
           : `You are expected to read the following files:\n${filesList}`;
-      const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.`;
+      const kickoffPrompt = `You have the following task: ${task.prompt}. ${filesInstruction} Task type: ${task.type}.\n\nDon't start working yet - wait for me to send you the commands.`;
 
       // Schedule kickoff prompt (waits for completion)
       console.log(chalk.blue("   📤 Sending kickoff prompt..."));

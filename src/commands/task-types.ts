@@ -1,5 +1,9 @@
 import chalk from "chalk";
+import inquirer from "inquirer";
 import readline from "readline";
+import { promises as fs } from "fs";
+import os from "os";
+import path from "path";
 import {
   loadTaskTypes,
   loadGlobalTaskTypes,
@@ -11,7 +15,38 @@ import {
   ensureProjectTaskTypesDir,
   TaskTypeMapping,
   getCommandLocation,
+  getAllAvailableCommands,
 } from "../utils.js";
+import { promptCommandWithAutocomplete } from "./task-types-autocomplete.js";
+
+const GLOBAL_COMMANDS_DIR = path.join(os.homedir(), ".cursor", "commands");
+const PROJECT_COMMANDS_DIR = path.join(process.cwd(), ".cursor", "commands");
+
+async function createCommandFile(
+  commandName: string,
+  isGlobal: boolean
+): Promise<void> {
+  const commandsDir = isGlobal ? GLOBAL_COMMANDS_DIR : PROJECT_COMMANDS_DIR;
+  const commandFile = path.join(commandsDir, `${commandName}.md`);
+
+  // Create directory if it doesn't exist
+  await fs.mkdir(commandsDir, { recursive: true });
+
+  // Check if file already exists
+  try {
+    await fs.access(commandFile);
+    console.log(chalk.gray(`  ⚠️  ${commandName}.md already exists, skipping`));
+    return;
+  } catch {
+    // File doesn't exist, create it
+  }
+
+  const content = `# ${commandName}\n\nAdd your command instructions here.\n`;
+  await fs.writeFile(commandFile, content, "utf-8");
+
+  const location = isGlobal ? "global" : "project";
+  console.log(chalk.green(`  ✅ Created: ${commandName}.md (${location})`));
+}
 
 // Validate all task types and their commands
 export async function validateTaskTypes(): Promise<void> {
@@ -290,24 +325,50 @@ async function addTaskTypeInteractive(
   }
 
   console.log(chalk.blue(`\n📝 Adding task type: ${chalk.bold(name)}\n`));
-  console.log(
-    chalk.gray(
-      "Enter commands one by one (press Enter with empty line to finish):\n"
-    )
-  );
+
+  // Get all available commands for autocomplete
+  const availableCommands = await getAllAvailableCommands();
+
+  if (availableCommands.length === 0) {
+    console.error(
+      chalk.red(
+        "\n❌ No commands found. Create some command files first in ~/.cursor/commands/ or .cursor/commands/\n"
+      )
+    );
+    return;
+  }
 
   const commands: string[] = [];
   let index = 1;
 
-  while (true) {
-    const command = await question(
-      chalk.yellow(`  Command ${index} (or press Enter to finish): `)
+  // Show available commands for reference
+  console.log(chalk.gray("\nAvailable commands:"));
+  availableCommands.slice(0, 15).forEach((cmd) => {
+    console.log(
+      chalk.gray(
+        `  ${cmd.name.padEnd(25)} ${chalk.dim(`[${cmd.location}]`)} - ${cmd.preview.substring(0, 50)}`
+      )
     );
-    const trimmed = command.trim();
-    if (trimmed === "") {
+  });
+  if (availableCommands.length > 15) {
+    console.log(
+      chalk.gray(`  ... and ${availableCommands.length - 15} more`)
+    );
+  }
+  console.log();
+
+  while (true) {
+    const command = await promptCommandWithAutocomplete(
+      availableCommands,
+      index
+    );
+
+    if (command === null) {
       break;
     }
-    commands.push(trimmed);
+
+    commands.push(command);
+    console.log(chalk.green(`  ✓ Added: ${command}`));
     index++;
   }
 
@@ -316,20 +377,62 @@ async function addTaskTypeInteractive(
     return;
   }
 
-  // Validate commands exist
+  // Check which commands don't exist and offer to create them
   const missing = await validateCommandsExist(commands);
   if (missing.length > 0) {
-    console.error(
-      chalk.red(
-        `\n❌ Missing commands: ${missing.join(", ")}\n  Run 'csa task-types validate' to check all commands.\n`
+    console.log(
+      chalk.yellow(
+        `\n⚠️  Found ${missing.length} command(s) that don't exist yet:\n`
       )
     );
-    const continueAnyway = await question(
-      chalk.yellow("Continue anyway? (y/N): ")
+    missing.forEach((cmd) => {
+      console.log(chalk.gray(`  • ${cmd}`));
+    });
+
+    const createMissing = await question(
+      chalk.yellow(
+        `\nCreate these command files? (y/N): `
+      )
     );
-    if (continueAnyway.toLowerCase().trim() !== "y") {
-      console.log(chalk.gray("Cancelled."));
-      return;
+
+    if (createMissing.toLowerCase().trim() === "y") {
+      // Ask for location (global or project) for each missing command
+      const commandLocation = isGlobal ? "global" : "project";
+      const createLocation = await question(
+        chalk.yellow(
+          `Create commands in (g)lobal or (p)roject? [${commandLocation === "global" ? "g" : "p"}]: `
+        )
+      );
+      const createGlobal =
+        createLocation.toLowerCase().trim() === "g" ||
+        (createLocation.trim() === "" && commandLocation === "global");
+
+      console.log(chalk.blue("\n📝 Creating command files...\n"));
+
+      for (const command of missing) {
+        await createCommandFile(command, createGlobal);
+      }
+
+      console.log(
+        chalk.green(
+          `\n✅ Created ${missing.length} command file(s)! Don't forget to add content to them.\n`
+        )
+      );
+    } else {
+      console.log(
+        chalk.yellow(
+          `\n⚠️  Task type saved, but you'll need to create these command files manually:\n`
+        )
+      );
+      missing.forEach((cmd) => {
+        const location = isGlobal ? "global" : "project";
+        const dir =
+          location === "global"
+            ? `~/.cursor/commands/${cmd}.md`
+            : `.cursor/commands/${cmd}.md`;
+        console.log(chalk.gray(`  • ${dir}`));
+      });
+      console.log();
     }
   }
 
@@ -409,24 +512,49 @@ export async function editTaskType(
   });
   console.log();
 
-  console.log(
-    chalk.gray(
-      "Enter new commands one by one (press Enter with empty line to finish):\n"
-    )
-  );
+  // Get all available commands for autocomplete
+  const availableCommands = await getAllAvailableCommands();
+
+  if (availableCommands.length === 0) {
+    console.error(
+      chalk.red(
+        "\n❌ No commands found. Create some command files first in ~/.cursor/commands/ or .cursor/commands/\n"
+      )
+    );
+    return;
+  }
 
   const commands: string[] = [];
   let index = 1;
 
-  while (true) {
-    const command = await question(
-      chalk.yellow(`  Command ${index} (or press Enter to finish): `)
+  // Show available commands for reference
+  console.log(chalk.gray("\nAvailable commands:"));
+  availableCommands.slice(0, 15).forEach((cmd) => {
+    console.log(
+      chalk.gray(
+        `  ${cmd.name.padEnd(25)} ${chalk.dim(`[${cmd.location}]`)} - ${cmd.preview.substring(0, 50)}`
+      )
     );
-    const trimmed = command.trim();
-    if (trimmed === "") {
+  });
+  if (availableCommands.length > 15) {
+    console.log(
+      chalk.gray(`  ... and ${availableCommands.length - 15} more`)
+    );
+  }
+  console.log();
+
+  while (true) {
+    const command = await promptCommandWithAutocomplete(
+      availableCommands,
+      index
+    );
+
+    if (command === null) {
       break;
     }
-    commands.push(trimmed);
+
+    commands.push(command);
+    console.log(chalk.green(`  ✓ Added: ${command}`));
     index++;
   }
 
@@ -435,20 +563,62 @@ export async function editTaskType(
     return;
   }
 
-  // Validate commands exist
+  // Check which commands don't exist and offer to create them
   const missing = await validateCommandsExist(commands);
   if (missing.length > 0) {
-    console.error(
-      chalk.red(
-        `\n❌ Missing commands: ${missing.join(", ")}\n  Run 'csa task-types validate' to check all commands.\n`
+    console.log(
+      chalk.yellow(
+        `\n⚠️  Found ${missing.length} command(s) that don't exist yet:\n`
       )
     );
-    const continueAnyway = await question(
-      chalk.yellow("Continue anyway? (y/N): ")
+    missing.forEach((cmd) => {
+      console.log(chalk.gray(`  • ${cmd}`));
+    });
+
+    const createMissing = await question(
+      chalk.yellow(
+        `\nCreate these command files? (y/N): `
+      )
     );
-    if (continueAnyway.toLowerCase().trim() !== "y") {
-      console.log(chalk.gray("Cancelled."));
-      return;
+
+    if (createMissing.toLowerCase().trim() === "y") {
+      // Ask for location (global or project) for each missing command
+      const commandLocation = isGlobal ? "global" : "project";
+      const createLocation = await question(
+        chalk.yellow(
+          `Create commands in (g)lobal or (p)roject? [${commandLocation === "global" ? "g" : "p"}]: `
+        )
+      );
+      const createGlobal =
+        createLocation.toLowerCase().trim() === "g" ||
+        (createLocation.trim() === "" && commandLocation === "global");
+
+      console.log(chalk.blue("\n📝 Creating command files...\n"));
+
+      for (const command of missing) {
+        await createCommandFile(command, createGlobal);
+      }
+
+      console.log(
+        chalk.green(
+          `\n✅ Created ${missing.length} command file(s)! Don't forget to add content to them.\n`
+        )
+      );
+    } else {
+      console.log(
+        chalk.yellow(
+          `\n⚠️  Task type updated, but you'll need to create these command files manually:\n`
+        )
+      );
+      missing.forEach((cmd) => {
+        const location = isGlobal ? "global" : "project";
+        const dir =
+          location === "global"
+            ? `~/.cursor/commands/${cmd}.md`
+            : `.cursor/commands/${cmd}.md`;
+        console.log(chalk.gray(`  • ${dir}`));
+      });
+      console.log();
     }
   }
 
