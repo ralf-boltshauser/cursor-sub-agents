@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import lockfile from "proper-lockfile";
+import { getPlatformAdapter } from "./platform-adapter.js";
 import { AgentState, AgentsRegistry, Job } from "./types.js";
 
 const STATE_DIR = path.join(os.homedir(), ".csa");
@@ -353,6 +354,8 @@ export async function spawnAgent(
   delaySeconds: number = 0,
   followUpPrompts?: string[]
 ): Promise<void> {
+  const adapter = getPlatformAdapter();
+
   // Use only the original prompt in the URL (no appended completion instructions)
   const encodedPrompt = urlEncode(prompt);
   const url = `https://cursor.com/link/prompt?text=${encodedPrompt}`;
@@ -370,33 +373,33 @@ export async function spawnAgent(
 
   // Open URL at scheduled time
   if (openDelay > 0) {
-    const openScript = `sleep ${openDelay} && open "${url}"`;
-    spawn("/opt/homebrew/bin/zsh", ["-c", openScript], {
+    const { shell, args } = adapter.buildDelayedOpenUrlCommand(url, openDelay);
+    spawn(shell, args, {
       detached: true,
       stdio: "ignore",
     }).unref();
   } else {
-    spawn("open", [url], {
-      detached: true,
-      stdio: "ignore",
-    }).unref();
+    // Open immediately
+    adapter.openUrl(url).catch((err) => {
+      console.error(`Failed to open URL: ${err.message}`);
+    });
   }
 
   // First Enter press
-  const enter1Script = `sleep ${enter1Delay} && osascript -e 'tell application "System Events" to keystroke return'`;
-  spawn("/opt/homebrew/bin/zsh", ["-c", enter1Script], {
+  const enter1Cmd = adapter.buildDelayedEnterCommand(enter1Delay);
+  spawn(enter1Cmd.shell, enter1Cmd.args, {
     detached: true,
     stdio: "ignore",
   }).unref();
 
   // Second Enter press
-  const enter2Script = `sleep ${enter2Delay} && osascript -e 'tell application "System Events" to keystroke return'`;
-  spawn("/opt/homebrew/bin/zsh", ["-c", enter2Script], {
+  const enter2Cmd = adapter.buildDelayedEnterCommand(enter2Delay);
+  spawn(enter2Cmd.shell, enter2Cmd.args, {
     detached: true,
     stdio: "ignore",
   }).unref();
 
-  // Send follow-up prompts via osascript keystrokes
+  // Send follow-up prompts via platform-specific keystrokes
   // Each prompt: type text -> wait -> press Enter -> wait before next
   followUps.forEach((followUp, index) => {
     const typeDelay = currentDelay + index * 4; // Start typing at this time
@@ -404,26 +407,16 @@ export async function spawnAgent(
     const typingTime = Math.max(0.5, followUp.length * 0.01);
     const enterDelay = typeDelay + typingTime; // Press Enter after typing completes
 
-    // Escape special characters for osascript AppleScript string
-    // AppleScript uses backslash escaping within double-quoted strings
-    const escapedPrompt = followUp
-      .replace(/\\/g, "\\\\") // Escape backslashes first
-      .replace(/"/g, '\\"') // Escape double quotes
-      .replace(/\$/g, "\\$"); // Escape dollar signs for shell
-
-    // Type the prompt text using osascript
-    // Use a single keystroke command for the entire string
-    const typeScript = `sleep ${typeDelay} && osascript -e 'tell application "System Events" to keystroke "${escapedPrompt}"'`;
-    spawn("/opt/homebrew/bin/zsh", ["-c", typeScript], {
+    // Type the prompt text
+    const typeCmd = adapter.buildDelayedTypeTextCommand(followUp, typeDelay);
+    spawn(typeCmd.shell, typeCmd.args, {
       detached: true,
       stdio: "ignore",
     }).unref();
 
     // Press Enter after typing completes
-    const enterScript = `sleep ${enterDelay.toFixed(
-      2
-    )} && osascript -e 'tell application "System Events" to keystroke return'`;
-    spawn("/opt/homebrew/bin/zsh", ["-c", enterScript], {
+    const enterCmd = adapter.buildDelayedEnterCommand(enterDelay);
+    spawn(enterCmd.shell, enterCmd.args, {
       detached: true,
       stdio: "ignore",
     }).unref();
@@ -1092,89 +1085,43 @@ function executeOsascript(applescript: string): Promise<void> {
   });
 }
 
-// Self-Prompt Scheduling - Using stdin to avoid shell escaping issues
+// Self-Prompt Scheduling - Using platform adapter for cross-platform support
 // This is more reliable for complex text with quotes and special characters
 export async function scheduleSelfPrompt(
   text: string,
   isCommand: boolean = false
 ): Promise<void> {
-  // Escape for AppleScript string (inside double quotes)
-  // Only need to escape for AppleScript, not shell (since we use stdin)
-  const escapedText = text
-    .replace(/\\/g, "\\\\") // Escape backslashes first
-    .replace(/"/g, '\\"') // Escape double quotes for AppleScript
-    .replace(/\n/g, "\\n") // Handle newlines
-    .replace(/\r/g, "\\r") // Handle carriage returns
-    .replace(/\t/g, "\\t"); // Handle tabs
+  const adapter = getPlatformAdapter();
 
-  // Use stdin to pass AppleScript directly - avoids all shell escaping issues
-  const applescript = `tell application "System Events" to keystroke "${escapedText}"`;
+  try {
+    // Type the text using platform adapter (handles escaping automatically)
+    await adapter.typeText(text);
 
-  // Execute synchronously using spawnSync with stdin
-  const { spawnSync } = await import("child_process");
-  const typeResult = spawnSync("osascript", ["-"], {
-    input: applescript,
-    stdio: "pipe",
-    encoding: "utf8",
-  });
+    // Wait after typing to ensure it's registered
+    await sleep(500);
 
-  if (typeResult.error) {
-    throw new Error(`Failed to type text: ${typeResult.error.message}`);
-  }
-  if (typeResult.status !== 0) {
-    const stderr = typeResult.stderr?.toString() || "";
-    throw new Error(
-      `osascript failed with code ${typeResult.status}: ${stderr}`
-    );
-  }
+    // First Enter (select command or submit prompt)
+    await adapter.pressEnter();
 
-  // Wait after typing to ensure it's registered
-  await sleep(500);
+    // Wait after first Enter - longer for long texts to ensure everything is processed
+    const textLength = text.length;
+    const waitTime = textLength > 200 ? 3000 : textLength > 100 ? 2000 : 1000;
+    await sleep(waitTime);
 
-  // First Enter (select command or submit prompt)
-  const enter1Script = `tell application "System Events" to keystroke return`;
-  const enter1Result = spawnSync("osascript", ["-"], {
-    input: enter1Script,
-    stdio: "pipe",
-    encoding: "utf8",
-  });
+    // Second Enter (only for commands, to submit)
+    if (isCommand) {
+      await adapter.pressEnter();
 
-  if (enter1Result.error) {
-    throw new Error(`Failed to press Enter: ${enter1Result.error.message}`);
-  }
-  if (enter1Result.status !== 0) {
-    const stderr = enter1Result.stderr?.toString() || "";
-    throw new Error(
-      `osascript failed with code ${enter1Result.status}: ${stderr}`
-    );
-  }
-
-  // Wait after first Enter - longer for long texts to ensure everything is processed
-  const textLength = text.length;
-  const waitTime = textLength > 200 ? 3000 : textLength > 100 ? 2000 : 1000;
-  await sleep(waitTime);
-
-  // Second Enter (only for commands, to submit)
-  if (isCommand) {
-    const enter2Script = `tell application "System Events" to keystroke return`;
-    const enter2Result = spawnSync("osascript", ["-"], {
-      input: enter2Script,
-      stdio: "pipe",
-      encoding: "utf8",
-    });
-
-    if (enter2Result.error) {
-      throw new Error(`Failed to press Enter: ${enter2Result.error.message}`);
+      // Wait after second Enter
+      await sleep(1000);
     }
-    if (enter2Result.status !== 0) {
-      const stderr = enter2Result.stderr?.toString() || "";
-      throw new Error(
-        `osascript failed with code ${enter2Result.status}: ${stderr}`
-      );
-    }
-
-    // Wait after second Enter
-    await sleep(1000);
+  } catch (error) {
+    console.error(
+      `Failed to schedule self-prompt: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    throw error; // Re-throw to allow caller to handle
   }
 }
 
@@ -1192,14 +1139,17 @@ export async function spawnAgentWithJob(
   const encodedPrompt = urlEncode(goalWithClarification);
   const url = `https://cursor.com/link/prompt?text=${encodedPrompt}`;
 
-  // Open URL in new Cursor window
-  const { spawnSync } = await import("child_process");
-  const openResult = spawnSync("open", [url], {
-    stdio: "pipe",
-  });
-
-  if (openResult.error) {
-    throw new Error(`Failed to open URL: ${openResult.error.message}`);
+  // Open URL in new Cursor window using platform adapter
+  const adapter = getPlatformAdapter();
+  try {
+    await adapter.openUrl(url);
+  } catch (error) {
+    console.error(
+      `Failed to open URL for job: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    throw error;
   }
 
   // Wait for Cursor window to open and be ready
@@ -1207,57 +1157,35 @@ export async function spawnAgentWithJob(
 
   // Ensure Cursor is the active application and window is focused
   // This helps ensure keystrokes go to the correct window
-  const activateScript = `tell application "Cursor" to activate`;
-  const activateResult = spawnSync("osascript", ["-"], {
-    input: activateScript,
-    stdio: "pipe",
-    encoding: "utf8",
-  });
-
-  if (activateResult.error) {
-    // Non-fatal - continue anyway
-    console.warn("Warning: Could not activate Cursor window");
+  try {
+    await adapter.activateCursor();
+  } catch (error) {
+    console.warn(
+      `Warning: Could not activate Cursor window: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    // Continue anyway - keystrokes might still work
   }
 
   await sleep(500);
 
   // Submit the initial prompt (Enter twice - same pattern as spawnAgent)
-  const enter1Script = `tell application "System Events" to keystroke return`;
-  const enter1Result = spawnSync("osascript", ["-"], {
-    input: enter1Script,
-    stdio: "pipe",
-    encoding: "utf8",
-  });
+  try {
+    await adapter.pressEnter();
 
-  if (enter1Result.error) {
-    throw new Error(`Failed to press Enter: ${enter1Result.error.message}`);
-  }
-  if (enter1Result.status !== 0) {
-    const stderr = enter1Result.stderr?.toString() || "";
-    throw new Error(
-      `osascript failed with code ${enter1Result.status}: ${stderr}`
+    // Wait longer for goal submission (long text)
+    await sleep(3000);
+
+    // Second Enter to submit
+    await adapter.pressEnter();
+  } catch (error) {
+    console.error(
+      `Failed to submit initial prompt: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
-  }
-
-  // Wait longer for goal submission (long text)
-  await sleep(3000);
-
-  // Second Enter to submit
-  const enter2Script = `tell application "System Events" to keystroke return`;
-  const enter2Result = spawnSync("osascript", ["-"], {
-    input: enter2Script,
-    stdio: "pipe",
-    encoding: "utf8",
-  });
-
-  if (enter2Result.error) {
-    throw new Error(`Failed to press Enter: ${enter2Result.error.message}`);
-  }
-  if (enter2Result.status !== 0) {
-    const stderr = enter2Result.stderr?.toString() || "";
-    throw new Error(
-      `osascript failed with code ${enter2Result.status}: ${stderr}`
-    );
+    throw error;
   }
 
   // Wait longer after goal submission (long text)

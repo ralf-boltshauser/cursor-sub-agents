@@ -18,6 +18,7 @@ import {
   showConfig,
   useGlobal,
 } from "./commands/config.js";
+import { runDoctor } from "./commands/doctor.js";
 import { scheduleJob } from "./commands/execute.js";
 import { feedbackAgent } from "./commands/feedback.js";
 import {
@@ -150,6 +151,13 @@ program
   .argument("<jobId>", "Job ID to validate")
   .action(async (jobId: string) => {
     await validateJob(jobId);
+  });
+
+program
+  .command("doctor")
+  .description("Check system dependencies and platform compatibility")
+  .action(async () => {
+    await runDoctor();
   });
 
 // Task Types Management

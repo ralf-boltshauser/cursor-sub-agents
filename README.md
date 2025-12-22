@@ -89,6 +89,14 @@ Shows all sessions and agents with their current status.
 - `cursor-sub-agents complete <agentId> [message]` - Submit work and wait for approval
   - Optional: `--timeout <minutes>` (default: 30)
 
+### System Diagnostics
+
+- `cursor-sub-agents doctor` - Check system dependencies and platform compatibility
+  - Verifies all required tools are installed and accessible
+  - Tests URL opening and keyboard automation capabilities
+  - Provides installation instructions for missing tools
+  - Useful for troubleshooting platform-specific issues
+
 ### Cursor Command Management
 
 - `cursor-sub-agents add-command [template]` - Create a new Cursor command or install a template
@@ -153,6 +161,8 @@ The `{agentId}` placeholder in prompts will be automatically replaced with each 
 - ✅ **Cursor Command Templates** - Pre-written commands for common workflows
 - ✅ **Follow-up Prompts** - Automatically send follow-up prompts to agents via prompt queues
 - ✅ **Config Management** - Manage follow-up prompts via CLI with local/global config support
+- ✅ **Cross-Platform Support** - Works on macOS, Linux (X11/Wayland), and Windows
+- ✅ **System Diagnostics** - Doctor command to verify platform compatibility and dependencies
 
 ## How It Works
 
@@ -180,6 +190,61 @@ The `{agentId}` placeholder in prompts will be automatically replaced with each 
 
 - Node.js >= 18.0.0
 - Cursor IDE (for the deep linking functionality)
+
+### Platform-Specific Requirements
+
+The tool supports macOS, Linux, and Windows. Each platform requires specific tools for automation:
+
+#### macOS
+- `osascript` (built-in) - for keyboard automation
+- `open` (built-in) - for opening URLs
+- Shell (zsh/bash) - for command execution
+
+#### Linux
+- **URL Opener** (one of): `xdg-open`, `gio`, `gnome-open`, `kde-open`, or `exo-open`
+- **Keyboard Automation** (depends on display server):
+  - **X11**: `xdotool` (recommended) or `ydotool`
+  - **Wayland**: `wtype` (recommended), `ydotool`, or `kdotool` (KDE only)
+- Shell (bash/zsh) - for command execution
+
+**Installation Examples:**
+```bash
+# Arch Linux
+sudo pacman -S xdg-utils xdotool  # For X11
+sudo pacman -S xdg-utils wtype    # For Wayland
+
+# Ubuntu/Debian
+sudo apt-get install xdg-utils xdotool  # For X11
+sudo apt-get install xdg-utils wtype   # For Wayland
+
+# Fedora
+sudo dnf install xdg-utils xdotool  # For X11
+sudo dnf install xdg-utils wtype    # For Wayland
+```
+
+#### Windows
+- PowerShell (built-in on Windows 7+) - for keyboard automation and window activation
+- `cmd.exe` (built-in) - for command execution
+
+**Note:** If PowerShell execution policy is restrictive, you may need to run:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### Checking System Compatibility
+
+Use the `doctor` command to verify all platform-specific dependencies are installed and working:
+
+```bash
+cursor-sub-agents doctor
+```
+
+This will:
+- Detect your platform and display environment information
+- Check availability of all required tools
+- Test basic functionality (URL opening, keyboard automation)
+- Provide installation instructions for missing tools
+- Return exit code 0 if all checks pass, 1 if issues are found
 
 ## License
 
