@@ -193,9 +193,11 @@ export class MacOSAdapter extends BaseAdapter {
   }
 
   buildDelayedEnterCommand(delaySeconds: number): DelayedCommand {
+    // Activate Cursor first, then press Enter
     // Escape single quotes for shell: ' becomes '\'' (end quote, escaped quote, start quote)
-    const escapedScript = APPLESCRIPT.KEYSTROKE_RETURN.replace(/'/g, "'\\''");
-    const command = `${TOOLS.OSASCRIPT} -e '${escapedScript}'`;
+    const activateScript = APPLESCRIPT.ACTIVATE_CURSOR.replace(/'/g, "'\\''");
+    const keystrokeScript = APPLESCRIPT.KEYSTROKE_RETURN.replace(/'/g, "'\\''");
+    const command = `${TOOLS.OSASCRIPT} -e '${activateScript}' && sleep 0.2 && ${TOOLS.OSASCRIPT} -e '${keystrokeScript}'`;
     return this.buildDelayedCommand(delaySeconds, command);
   }
 
@@ -205,9 +207,11 @@ export class MacOSAdapter extends BaseAdapter {
   ): DelayedCommand {
     const escapedText = this.escapeTextForAppleScript(text);
     const applescript = APPLESCRIPT.KEYSTROKE(escapedText);
+    // Activate Cursor first, then type text
     // Escape single quotes for shell: ' becomes '\'' (end quote, escaped quote, start quote)
+    const activateScript = APPLESCRIPT.ACTIVATE_CURSOR.replace(/'/g, "'\\''");
     const escapedScript = applescript.replace(/'/g, "'\\''");
-    const command = `${TOOLS.OSASCRIPT} -e '${escapedScript}'`;
+    const command = `${TOOLS.OSASCRIPT} -e '${activateScript}' && sleep 0.2 && ${TOOLS.OSASCRIPT} -e '${escapedScript}'`;
     return this.buildDelayedCommand(delaySeconds, command);
   }
 }
