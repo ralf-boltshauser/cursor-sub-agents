@@ -1094,6 +1094,20 @@ export async function scheduleSelfPrompt(
   const adapter = getPlatformAdapter();
 
   try {
+    // Ensure Cursor is the active application and window is focused
+    // This helps ensure keystrokes go to the correct window
+    try {
+      await adapter.activateCursor();
+      await sleep(200); // Small delay to ensure window is focused
+    } catch (error) {
+      // Non-fatal - continue anyway, keystrokes might still work
+      console.warn(
+        `Warning: Could not activate Cursor window before typing: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
     // Type the text using platform adapter (handles escaping automatically)
     await adapter.typeText(text);
 
