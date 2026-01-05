@@ -1,10 +1,12 @@
 import chalk from "chalk";
 import {
   getTaskTypeCommands,
+  loadJob,
   loadJobFileRaw,
   loadTaskTypes,
   validateCommandsExist,
   validateJobStructure,
+  validateTaskStructure,
 } from "../utils.js";
 
 export async function validateJob(jobId: string): Promise<void> {
@@ -12,8 +14,8 @@ export async function validateJob(jobId: string): Promise<void> {
     console.log(chalk.blue(`\n🔍 Validating job: ${chalk.bold(jobId)}\n`));
 
     // Load job file using utility function
-    let job: any;
     let jobFile: string;
+    let job: unknown;
     try {
       const result = await loadJobFileRaw(jobId);
       job = result.job;
@@ -48,60 +50,40 @@ export async function validateJob(jobId: string): Promise<void> {
     }
 
     console.log(chalk.green(`  ✅ Job structure valid`));
-    console.log(chalk.gray(`  Goal: ${job.goal}`));
-    console.log(chalk.gray(`  Tasks: ${job.tasks.length}\n`));
+
+    // Load validated job to get proper type
+    const validatedJob = await loadJob(jobId);
+    console.log(chalk.gray(`  Goal: ${validatedJob.goal}`));
+    console.log(chalk.gray(`  Tasks: ${validatedJob.tasks.length}\n`));
 
     // Validate each task
     let hasErrors = false;
     const allTaskTypes = await loadTaskTypes();
 
-    for (const [taskIndex, task] of job.tasks.entries()) {
+    for (const [taskIndex, task] of validatedJob.tasks.entries()) {
       console.log(
         chalk.gray(
-          `Validating task ${taskIndex + 1}/${job.tasks.length}: ${chalk.bold(
-            task.name || "unnamed"
-          )}`
+          `Validating task ${taskIndex + 1}/${
+            validatedJob.tasks.length
+          }: ${chalk.bold(task.name || "unnamed")}`
         )
       );
 
-      // Validate task structure
-      if (!task.name) {
-        console.error(chalk.red("  ❌ Task missing 'name' field"));
-        hasErrors = true;
-        continue;
-      }
-      if (!task.type) {
-        console.error(chalk.red("  ❌ Task missing 'type' field"));
-        hasErrors = true;
-        continue;
-      }
-      if (!Array.isArray(task.files)) {
-        console.error(chalk.red("  ❌ Task 'files' must be an array"));
-        hasErrors = true;
-        continue;
-      }
-      if (!task.prompt) {
-        console.error(chalk.red("  ❌ Task missing 'prompt' field"));
-        hasErrors = true;
-        continue;
-      }
-
-      // Validate task type exists
-      if (!(task.type in allTaskTypes)) {
-        console.error(
-          chalk.red(
-            `  ❌ Task type "${
-              task.type
-            }" not found. Available types: ${Object.keys(allTaskTypes).join(
-              ", "
-            )}`
-          )
-        );
-        console.error(
-          chalk.gray(
-            `     Run 'csa task-types list' to see all available task types`
-          )
-        );
+      // Validate task structure using consolidated function
+      const structureError = validateTaskStructure(
+        task,
+        taskIndex,
+        allTaskTypes
+      );
+      if (structureError) {
+        console.error(chalk.red(`  ❌ ${structureError.error}`));
+        if (structureError.error.includes("not found")) {
+          console.error(
+            chalk.gray(
+              `     Run 'csa task-types list' to see all available task types`
+            )
+          );
+        }
         hasErrors = true;
         continue;
       }

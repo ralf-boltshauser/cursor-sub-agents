@@ -1,6 +1,7 @@
-import { loadState, STATE_FILE } from '../utils.js';
-import chalk from 'chalk';
-import fs from 'fs';
+import chalk from "chalk";
+import fs from "fs";
+import { Session } from "../types.js";
+import { loadState, STATE_FILE } from "../utils.js";
 
 export async function waitForAgents(sessionId: string): Promise<void> {
   const state = await loadState();
@@ -13,23 +14,23 @@ export async function waitForAgents(sessionId: string): Promise<void> {
 
   // Check if all agents are approved
   const allApproved = session.agents.every(
-    agent => agent.status === 'approved'
+    (agent) => agent.status === "approved"
   );
 
   if (allApproved) {
-    console.log(chalk.green('\n✅ All agents approved! Session complete.\n'));
+    console.log(chalk.green("\n✅ All agents approved! Session complete.\n"));
     displaySessionStatus(sessionId, session);
     return;
   }
 
   // Check for pending agents
   const pendingAgents = session.agents.filter(
-    agent => agent.status === 'pending_verification'
+    (agent) => agent.status === "pending_verification"
   );
 
   if (pendingAgents.length > 0) {
     // Already have pending agents, show status and return
-    console.log(chalk.blue('\n📋 Agents pending verification:\n'));
+    console.log(chalk.blue("\n📋 Agents pending verification:\n"));
     for (const agent of pendingAgents) {
       console.log(chalk.gray(`  • Agent ${chalk.bold(agent.id)}`));
       if (agent.returnMessage) {
@@ -38,50 +39,44 @@ export async function waitForAgents(sessionId: string): Promise<void> {
     }
     console.log();
     displaySessionStatus(sessionId, session);
-    
+
     // Check if there are still running agents
     const runningAgents = session.agents.filter(
-      agent => agent.status === 'running'
+      (agent) => agent.status === "running"
     );
-    
+
     console.log(
       chalk.yellow(
         `\n🤖 AUTOMATED WORKFLOW: Review and approve/feedback the pending agent(s), then continue waiting.\n`
       )
     );
-    console.log(
-      chalk.blue(
-        `\n📋 Next steps (execute automatically):\n`
-      )
-    );
+    console.log(chalk.blue(`\n📋 Next steps (execute automatically):\n`));
     for (const agent of pendingAgents) {
       console.log(
-        chalk.gray(
-          `  • Review work from agent ${chalk.bold(agent.id)}:\n`
-        )
+        chalk.gray(`  • Review work from agent ${chalk.bold(agent.id)}:\n`)
+      );
+      console.log(
+        chalk.gray(`    - If good: ${chalk.bold(`csa accept ${agent.id}`)}\n`)
       );
       console.log(
         chalk.gray(
-          `    - If good: ${chalk.bold(`csa accept ${agent.id}`)}\n`
-        )
-      );
-      console.log(
-        chalk.gray(
-          `    - If changes needed: ${chalk.bold(`csa feedback ${agent.id} "your feedback message"`)}\n`
+          `    - If changes needed: ${chalk.bold(
+            `csa feedback ${agent.id} "your feedback message"`
+          )}\n`
         )
       );
     }
-    
+
     if (runningAgents.length > 0) {
       console.log(
         chalk.gray(
-          `  • After reviewing all pending agents, run ${chalk.bold(`csa wait ${sessionId}`)} again to check for more completions\n`
+          `  • After reviewing all pending agents, run ${chalk.bold(
+            `csa wait ${sessionId}`
+          )} again to check for more completions\n`
         )
       );
       console.log(
-        chalk.gray(
-          `    (${runningAgents.length} agent(s) still running)\n`
-        )
+        chalk.gray(`    (${runningAgents.length} agent(s) still running)\n`)
       );
     } else {
       console.log(
@@ -90,12 +85,12 @@ export async function waitForAgents(sessionId: string): Promise<void> {
         )
       );
     }
-    
+
     return;
   }
 
   // No pending agents yet, wait for one to submit
-  console.log(chalk.yellow('\n⏳ Waiting for agents to submit...\n'));
+  console.log(chalk.yellow("\n⏳ Waiting for agents to submit...\n"));
 
   return new Promise<void>((resolve) => {
     let isResolved = false;
@@ -109,7 +104,7 @@ export async function waitForAgents(sessionId: string): Promise<void> {
         const currentSession = currentState.sessions[sessionId];
 
         if (!currentSession) {
-          console.error(chalk.red('Error: Session not found'));
+          console.error(chalk.red("Error: Session not found"));
           isResolved = true;
           resolve();
           return;
@@ -117,12 +112,12 @@ export async function waitForAgents(sessionId: string): Promise<void> {
 
         // Check for pending agents
         const pending = currentSession.agents.filter(
-          agent => agent.status === 'pending_verification'
+          (agent) => agent.status === "pending_verification"
         );
 
         // Check if all approved
         const allDone = currentSession.agents.every(
-          agent => agent.status === 'approved'
+          (agent) => agent.status === "approved"
         );
 
         if (allDone) {
@@ -130,7 +125,9 @@ export async function waitForAgents(sessionId: string): Promise<void> {
           if (isWatching) {
             fs.unwatchFile(STATE_FILE);
           }
-          console.log(chalk.green('\n✅ All agents approved! Session complete.\n'));
+          console.log(
+            chalk.green("\n✅ All agents approved! Session complete.\n")
+          );
           displaySessionStatus(sessionId, currentSession);
           resolve();
           return;
@@ -141,8 +138,10 @@ export async function waitForAgents(sessionId: string): Promise<void> {
           if (isWatching) {
             fs.unwatchFile(STATE_FILE);
           }
-          
-          console.log(chalk.blue('\n📋 Agent(s) submitted and pending verification:\n'));
+
+          console.log(
+            chalk.blue("\n📋 Agent(s) submitted and pending verification:\n")
+          );
           for (const agent of pending) {
             console.log(chalk.gray(`  • Agent ${chalk.bold(agent.id)}`));
             if (agent.returnMessage) {
@@ -151,22 +150,18 @@ export async function waitForAgents(sessionId: string): Promise<void> {
           }
           console.log();
           displaySessionStatus(sessionId, currentSession);
-          
+
           // Check if there are still running agents
           const runningAgents = currentSession.agents.filter(
-            agent => agent.status === 'running'
+            (agent) => agent.status === "running"
           );
-          
+
           console.log(
             chalk.yellow(
               `\n🤖 AUTOMATED WORKFLOW: Review and approve/feedback the pending agent(s), then continue waiting.\n`
             )
           );
-          console.log(
-            chalk.blue(
-              `\n📋 Next steps (execute automatically):\n`
-            )
-          );
+          console.log(chalk.blue(`\n📋 Next steps (execute automatically):\n`));
           for (const agent of pending) {
             console.log(
               chalk.gray(
@@ -180,15 +175,19 @@ export async function waitForAgents(sessionId: string): Promise<void> {
             );
             console.log(
               chalk.gray(
-                `    - If changes needed: ${chalk.bold(`csa feedback ${agent.id} "your feedback message"`)}\n`
+                `    - If changes needed: ${chalk.bold(
+                  `csa feedback ${agent.id} "your feedback message"`
+                )}\n`
               )
             );
           }
-          
+
           if (runningAgents.length > 0) {
             console.log(
               chalk.gray(
-                `  • After reviewing all pending agents, run ${chalk.bold(`csa wait ${sessionId}`)} again to check for more completions\n`
+                `  • After reviewing all pending agents, run ${chalk.bold(
+                  `csa wait ${sessionId}`
+                )} again to check for more completions\n`
               )
             );
             console.log(
@@ -203,7 +202,7 @@ export async function waitForAgents(sessionId: string): Promise<void> {
               )
             );
           }
-          
+
           resolve();
         }
       } catch (error) {
@@ -235,23 +234,26 @@ export async function waitForAgents(sessionId: string): Promise<void> {
   });
 }
 
-function displaySessionStatus(sessionId: string, session: any): void {
+function displaySessionStatus(sessionId: string, session: Session): void {
   console.log(chalk.bold(`Session: ${sessionId}\n`));
-  
+
   // Simple table
   const idWidth = 8;
   const statusWidth = 20;
   const messageWidth = 50;
 
   const header = [
-    chalk.bold('ID'.padEnd(idWidth)),
-    chalk.bold('Status'.padEnd(statusWidth)),
-    chalk.bold('Message'),
-  ].join(' │ ');
+    chalk.bold("ID".padEnd(idWidth)),
+    chalk.bold("Status".padEnd(statusWidth)),
+    chalk.bold("Message"),
+  ].join(" │ ");
 
-  const separator = '─'.repeat(idWidth) + '─┼─' +
-                   '─'.repeat(statusWidth) + '─┼─' +
-                   '─'.repeat(messageWidth);
+  const separator =
+    "─".repeat(idWidth) +
+    "─┼─" +
+    "─".repeat(statusWidth) +
+    "─┼─" +
+    "─".repeat(messageWidth);
 
   console.log(header);
   console.log(chalk.gray(separator));
@@ -259,16 +261,17 @@ function displaySessionStatus(sessionId: string, session: any): void {
   for (const agent of session.agents) {
     const statusIcon = getStatusIcon(agent.status);
     const statusText = getStatusText(agent.status);
-    const message = agent.returnMessage || agent.feedback || '-';
-    const messageDisplay = message.length > messageWidth - 2 
-      ? message.substring(0, messageWidth - 5) + '...'
-      : message;
+    const message = agent.returnMessage || agent.feedback || "-";
+    const messageDisplay =
+      message.length > messageWidth - 2
+        ? message.substring(0, messageWidth - 5) + "..."
+        : message;
 
     const row = [
       chalk.bold(agent.id).padEnd(idWidth),
       `${statusIcon} ${statusText}`.padEnd(statusWidth),
       messageDisplay,
-    ].join(' │ ');
+    ].join(" │ ");
 
     console.log(row);
   }
@@ -277,41 +280,41 @@ function displaySessionStatus(sessionId: string, session: any): void {
 
 function getStatusIcon(status: string): string {
   switch (status) {
-    case 'running':
-      return chalk.yellow('⏳');
-    case 'pending_verification':
-      return chalk.blue('📋');
-    case 'feedback_requested':
-      return chalk.yellow('📨');
-    case 'approved':
-      return chalk.green('✅');
-    case 'completed':
-      return chalk.green('✓');
-    case 'failed':
-      return chalk.red('✗');
-    case 'timeout':
-      return chalk.red('⏰');
+    case "running":
+      return chalk.yellow("⏳");
+    case "pending_verification":
+      return chalk.blue("📋");
+    case "feedback_requested":
+      return chalk.yellow("📨");
+    case "approved":
+      return chalk.green("✅");
+    case "completed":
+      return chalk.green("✓");
+    case "failed":
+      return chalk.red("✗");
+    case "timeout":
+      return chalk.red("⏰");
     default:
-      return '?';
+      return "?";
   }
 }
 
 function getStatusText(status: string): string {
   switch (status) {
-    case 'running':
-      return chalk.yellow('running');
-    case 'pending_verification':
-      return chalk.blue('pending');
-    case 'feedback_requested':
-      return chalk.yellow('needs changes');
-    case 'approved':
-      return chalk.green('approved');
-    case 'completed':
-      return chalk.green('completed');
-    case 'failed':
-      return chalk.red('failed');
-    case 'timeout':
-      return chalk.red('timeout');
+    case "running":
+      return chalk.yellow("running");
+    case "pending_verification":
+      return chalk.blue("pending");
+    case "feedback_requested":
+      return chalk.yellow("needs changes");
+    case "approved":
+      return chalk.green("approved");
+    case "completed":
+      return chalk.green("completed");
+    case "failed":
+      return chalk.red("failed");
+    case "timeout":
+      return chalk.red("timeout");
     default:
       return status;
   }

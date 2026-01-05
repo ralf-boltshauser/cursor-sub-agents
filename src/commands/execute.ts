@@ -7,23 +7,18 @@ import {
   loadTaskTypes,
   scheduleSelfPrompt,
   sleep,
+  validateAllTasks,
   validateCommandsExist,
   validateJobStructure,
 } from "../utils.js";
-
-interface TaskValidationError {
-  taskIndex: number;
-  taskName: string;
-  error: string;
-}
 
 export async function scheduleJob(jobId: string): Promise<void> {
   try {
     console.log(chalk.blue(`\n📅 Scheduling job: ${chalk.bold(jobId)}\n`));
 
     // Load and validate job structure before loading
-    let job: any;
     let jobFile: string;
+    let job: unknown;
     try {
       const result = await loadJobFileRaw(jobId);
       job = result.job;
@@ -71,80 +66,8 @@ export async function scheduleJob(jobId: string): Promise<void> {
 
     // Validate all tasks upfront before starting execution
     console.log(chalk.blue("🔍 Validating all tasks before scheduling...\n"));
-    const errors: TaskValidationError[] = [];
     const allTaskTypes = await loadTaskTypes();
-
-    for (const [taskIndex, task] of validatedJob.tasks.entries()) {
-      // Validate task structure
-      if (!task.name) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: "unnamed",
-          error: "Task missing 'name' field",
-        });
-        continue;
-      }
-      if (!task.type) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: task.name,
-          error: "Task missing 'type' field",
-        });
-        continue;
-      }
-      if (!Array.isArray(task.files)) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: task.name,
-          error: "Task 'files' must be an array",
-        });
-        continue;
-      }
-      if (!task.prompt) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: task.name,
-          error: "Task missing 'prompt' field",
-        });
-        continue;
-      }
-
-      // Validate task type exists
-      if (!(task.type in allTaskTypes)) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: task.name,
-          error: `Task type "${
-            task.type
-          }" not found. Available types: ${Object.keys(allTaskTypes).join(
-            ", "
-          )}`,
-        });
-        continue;
-      }
-
-      // Get commands for this task type
-      const commands = await getTaskTypeCommands(task.type);
-      if (commands.length === 0) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: task.name,
-          error: `Task type "${task.type}" has no commands defined`,
-        });
-        continue;
-      }
-
-      // Validate all commands exist
-      const missing = await validateCommandsExist(commands);
-      if (missing.length > 0) {
-        errors.push({
-          taskIndex: taskIndex + 1,
-          taskName: task.name,
-          error: `Missing commands: ${missing.join(", ")}`,
-        });
-        continue;
-      }
-    }
+    const errors = await validateAllTasks(validatedJob.tasks, allTaskTypes);
 
     // Report all errors if any
     if (errors.length > 0) {

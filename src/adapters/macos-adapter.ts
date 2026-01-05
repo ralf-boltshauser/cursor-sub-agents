@@ -80,7 +80,7 @@ export class MacOSAdapter extends BaseAdapter {
     try {
       await this.activateCursor();
       // Small delay to ensure window is focused
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     } catch (error) {
       // Non-fatal - continue anyway
     }
@@ -113,7 +113,7 @@ export class MacOSAdapter extends BaseAdapter {
     try {
       await this.activateCursor();
       // Small delay to ensure window is focused
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     } catch (error) {
       // Non-fatal - continue anyway
     }

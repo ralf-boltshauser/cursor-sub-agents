@@ -38,8 +38,8 @@ export async function spawnAgentsWithJobs(jobIds: string[]): Promise<string> {
       const location = await getJobLocation(jobId);
 
       // Load and validate job structure before loading
-      let job: any;
       let jobFile: string;
+      let job: unknown;
       try {
         const result = await loadJobFileRaw(jobId);
         job = result.job;
