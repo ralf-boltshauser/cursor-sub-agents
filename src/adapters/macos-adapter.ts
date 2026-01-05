@@ -76,6 +76,15 @@ export class MacOSAdapter extends BaseAdapter {
    * @throws {Error} If osascript command fails
    */
   async typeText(text: string): Promise<void> {
+    // Always activate Cursor first to ensure keystrokes go to the right window
+    try {
+      await this.activateCursor();
+      // Small delay to ensure window is focused
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } catch (error) {
+      // Non-fatal - continue anyway
+    }
+
     const escapedText = this.escapeTextForAppleScript(text);
     const applescript = APPLESCRIPT.KEYSTROKE(escapedText);
 
@@ -100,6 +109,15 @@ export class MacOSAdapter extends BaseAdapter {
    * @throws {Error} If osascript command fails
    */
   async pressEnter(): Promise<void> {
+    // Always activate Cursor first to ensure keystrokes go to the right window
+    try {
+      await this.activateCursor();
+      // Small delay to ensure window is focused
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } catch (error) {
+      // Non-fatal - continue anyway
+    }
+
     const result = await this.executeCommand(TOOLS.OSASCRIPT, ["-"], {
       input: APPLESCRIPT.KEYSTROKE_RETURN,
       encoding: "utf8",
